@@ -9,13 +9,14 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from clearpath import db
+from clearpath import db, seed
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +30,17 @@ def demo_mode_enabled() -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db_path = db.get_database_path()
+    now = datetime.now(timezone.utc)
     logger.info("Initializing database at %s (demo_mode=%s)", db_path, demo_mode_enabled())
-    conn = db.connect(db_path)
-    try:
-        db.initialize_schema(conn)
-    finally:
-        conn.close()
+    if demo_mode_enabled():
+        seeded = seed.auto_seed(db_path, now)
+        logger.info("Fresh DB seeded: %s", seeded)
+    else:
+        conn = db.connect(db_path)
+        try:
+            db.initialize_schema(conn)
+        finally:
+            conn.close()
     yield
 
 
