@@ -1,0 +1,15 @@
+services:
+  clearpath:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_PATH: /data/clearpath.db
+      DEMO_MODE: "true"
+      PORT: "8000"
+    volumes:
+      - clearpath-data:/data
+    restart: unless-stopped
+
+volumes:
+  clearpath-data:
