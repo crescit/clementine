@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ClearPath · Compliance Review Queue</title>
+  <title>ClearPath · Submission Workspace</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
@@ -22,21 +22,21 @@
     </div>
   </header>
   <main id="main" class="app-main">
-    <section class="shell-placeholder" aria-labelledby="queue-title">
-      <h1 id="queue-title">Review Queue</h1>
+    <section class="shell-placeholder" aria-labelledby="detail-title">
+      <h1 id="detail-title">Submission Workspace</h1>
       <p class="lede">
-        ClearPath Compliance Review is booting. The queue prioritizes work
-        approaching or past the 72-hour review target. Queue rows, metrics,
-        filters, and the completed view arrive in later cards.
+        Review detail, version history, and inline revision arrive in later
+        cards. This page loads a record by id from the URL.
       </p>
-      <p class="meta" id="boot-status">Checking API…</p>
+      <p class="meta">Submission id: <span id="submission-id"></span></p>
+      <p class="meta" id="detail-status">Loading detail…</p>
       <p class="nav-links">
-        <a href="/static/submit.html">New submission</a>
+        <a href="/static/index.html">Back to queue</a>
         ·
-        <a href="/static/submission.html?id=cp-8904">Review workspace (sample id)</a>
+        <a href="/static/submit.html">New submission</a>
       </p>
     </section>
   </main>
-  <script type="module" src="/static/queue.js"></script>
+  <script type="module" src="/static/submission.js"></script>
 </body>
 </html>

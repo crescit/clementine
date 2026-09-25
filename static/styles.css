@@ -110,6 +110,22 @@ body {
   margin-left: auto;
 }
 
+.persona-slot {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.nav-links {
+  margin: var(--space-4) 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+}
+
+.nav-links a {
+  color: var(--accent-ink);
+}
+
 .app-main {
   max-width: var(--content-max);
   margin: 0 auto;
