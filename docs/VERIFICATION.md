@@ -20,9 +20,10 @@ Record commands, results, date, tested commit, tested URL, and known limitations
 
 | Item | Status | Notes |
 |---|---|---|
-| Preferred host | _choose before hour 12_ | Persistent container volume preferred; local + ngrok fallback allowed by brief |
-| GitHub credentials / repo | Git initialized locally; remote not yet created | Push by K15; confirm public or evaluator access |
-| Blockers | Hosting account + GitHub remote still open | Do not defer discovery to K15 |
+| Preferred host | Persistent container chosen | Named Docker volume persists SQLite across restarts; ngrok is the allowed fallback if a reachable container host is not available |
+| GitHub credentials / repo | Local Git only; remote not yet created | No `gh` CLI installed; push to a public (or explicitly granted) repo at K15 |
+| Container check | `docker build` + run passes | Root and `/static/{index,submission,submit}.html` plus JS/CSS all return 200 in the container |
+| Blockers | GitHub remote only | Hosting route settled; remote publication still pending at K15 |
 
 ## Known limitations
 

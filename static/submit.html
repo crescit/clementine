@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ClearPath · Compliance Review Queue</title>
+  <title>ClearPath · New Submission</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
@@ -22,21 +22,20 @@
     </div>
   </header>
   <main id="main" class="app-main">
-    <section class="shell-placeholder" aria-labelledby="queue-title">
-      <h1 id="queue-title">Review Queue</h1>
+    <section class="shell-placeholder" aria-labelledby="intake-title">
+      <h1 id="intake-title">New Submission</h1>
       <p class="lede">
-        ClearPath Compliance Review is booting. The queue prioritizes work
-        approaching or past the 72-hour review target. Queue rows, metrics,
-        filters, and the completed view arrive in later cards.
+        Structured intake form arrives in a later card: title, optional partner,
+        channel, product, launch date, optional asset URL, and pasted copy.
+        Successful intake navigates to the submission detail page.
       </p>
-      <p class="meta" id="boot-status">Checking API…</p>
       <p class="nav-links">
-        <a href="/static/submit.html">New submission</a>
+        <a href="/static/index.html">Back to queue</a>
         ·
         <a href="/static/submission.html?id=cp-8904">Review workspace (sample id)</a>
       </p>
     </section>
   </main>
-  <script type="module" src="/static/queue.js"></script>
+  <script type="module" src="/static/submit.js"></script>
 </body>
 </html>

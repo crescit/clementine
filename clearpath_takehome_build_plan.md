@@ -1,8 +1,10 @@
 # ClearPath Compliance Review — Implementation and Kanban Plan
 
-> **Status: Ready for task creation.** This document is the implementation contract for Hermes and DeepSeek. Updated September 25, 2026 against the supplied 24-hour brief.
+> **Status: Ready for task creation.** This document is the implementation contract for Hermes and DeepSeek. Revision: `2026-09-25-multipage-v2`. Updated against the supplied 24-hour brief and Josh’s explicit HTML-pages/no-npm requirement.
 >
 > **Deliverable:** A working, publicly reachable demo URL **and** an accessible GitHub repository. Working locally, screenshots, or a container image alone do not satisfy the assignment.
+>
+> **Frontend contract:** Plain `index.html` plus separate HTML pages, shared CSS, and browser-native JavaScript, following the serving/navigation pattern in `ai_3d_mvp`. No TypeScript, npm/npx, package manager, frontend build step, or SPA router.
 >
 > **Execution:** Build the required scope below in dependency order. Hermes owns task sequencing and evidence; DeepSeek implements one ready card at a time. Do not interpret optional production ideas as required features.
 
@@ -55,7 +57,7 @@ Success is a working lifecycle with a credible operating model. Do not invent me
 
 ### Explicitly excluded
 
-Production login/SSO, external affiliate accounts, real email, notifications, email/Excel import, file uploads, OCR/PDF annotation, live site crawling, AI/LLM review, bulk approval, configurable policy editor, legal jurisdiction engine, separate analytics page, saved drafts, deletion/reopening, WebSockets, workers, queues/brokers, microservices, Postgres, ORM, React, TypeScript, Tailwind, Node build tooling.
+Production login/SSO, external affiliate accounts, real email, notifications, email/Excel import, file uploads, OCR/PDF annotation, live site crawling, AI/LLM review, bulk approval, configurable policy editor, legal jurisdiction engine, separate analytics page, saved drafts, deletion/reopening, WebSockets, workers, queues/brokers, microservices, Postgres, ORM, React, TypeScript/TSX, JSX, Tailwind, Node runtime/tooling, npm/npx/pnpm/yarn, package.json, node_modules, Vite/Webpack, frontend compilation/bundling, SPA/hash routing, and separate frontend containers.
 
 Freeform discussion comments and text diffs are optional; decision comments and selectable full versions are required. There is no separate commenting endpoint in the required scope.
 
@@ -83,7 +85,7 @@ Cut in this order if behind: decorative animation, optional diffs/comments, addi
 
 ## 3. Stack and repository contract
 
-Use Python 3.12, FastAPI, Uvicorn, Pydantic request/response models, stdlib `sqlite3`, vanilla HTML/CSS/JS, pytest, httpx for API tests, uv, and Docker Compose. Resolve compatible versions once, commit `uv.lock`, and use frozen installs afterward. No frontend dependency manager.
+Use Python 3.12, FastAPI, Uvicorn, Pydantic request/response models, stdlib `sqlite3`, vanilla HTML/CSS/JS, pytest, httpx for API tests, uv, and Docker Compose. Resolve compatible versions once, commit `uv.lock`, and use frozen installs afterward. Python dependencies use uv only. Frontend files are served exactly as authored: no Node installation, npm/npx command, package.json, node_modules, transpiler, bundler, or generated frontend dist directory, including for tests or deployment.
 
 One process serves API and same-origin static assets. Run one Uvicorn worker with local SQLite storage. No remote services are required to evaluate locally.
 
@@ -98,9 +100,14 @@ clearpath/
   metrics.py      # queue urgency and metric calculations
   seed.py         # deterministic relative-time fixtures and reset
 static/
-  index.html
-  app.js
-  styles.css
+  index.html      # queue and metrics
+  submission.html # review detail, history, inline revision form
+  submit.html     # new submission form
+  styles.css      # shared design tokens and page styles
+  common.js       # fetch helper, persona header, safe shared UI helpers
+  queue.js        # index.html behavior
+  submission.js   # submission.html behavior
+  submit.js       # submit.html behavior
 tests/
   conftest.py
   test_api.py
@@ -122,7 +129,19 @@ docker-compose.yml
 README.md
 ```
 
-Small static ES modules may replace a single unwieldy JS file; no bundler. Routes parse input and map errors; workflow functions own transactions. Tests use temporary database paths and an injected UTC clock, never the demo database.
+Use native `<script type="module" src="/static/queue.js">` (and the matching file per page), with relative imports from `common.js`. Pages contain their own semantic HTML structure and share small helpers; do not build a generic renderer or client-side router. Routes parse input and map errors; workflow functions own transactions. Tests use temporary database paths and an injected UTC clock, never the demo database.
+
+### HTML page serving and navigation
+
+The inspected reference `/Users/josh/Documents/Projects/ai_3d_mvp` serves `static/index.html`, separate pages such as `orders.html`, and native JavaScript through FastAPI `StaticFiles`. Follow that structural pattern without importing its authentication, commerce features, or unrelated libraries. The reference is informational; implementation must not require it at runtime.
+
+- `GET /` serves `static/index.html` via `FileResponse`; mount only the `static/` directory at `/static`.
+- `/static/index.html` is the queue, `/static/submission.html?id=<uuid>` is detail, and `/static/submit.html` is intake. All must return real HTML directly on fresh load.
+- Use ordinary `<a href>` links and normal full-page browser navigation. Read IDs and filters with `URLSearchParams`; do not use `#/queue`, `pushState` routing, SPA fallbacks, or a frontend dev server.
+- Queue filters are query parameters on `index.html`; persist the last queue query in session storage for the Back to queue link. Never treat a user-provided return URL as an unrestricted redirect.
+- Persona selection lives in local storage and initializes on every page. A persona switch refreshes the current page’s data and actions; no client-side route system is needed.
+- Successful intake navigates to the detail HTML page. Review/revision actions can refresh data within that page through `fetch`; navigating between product surfaces loads a different HTML document.
+- Shared styles/header conventions keep the three pages consistent. There is no build or copy-assets step.
 
 Configuration: `DATABASE_PATH` (default `./data/clearpath.db`), `DEMO_MODE` (default true for this take-home). Honor the host's `PORT` at launch (default 8000). `.env.example` documents these; the README must state how to export them because merely creating a `.env` does not load it automatically. Do not claim production mode/auth exists when `DEMO_MODE=false`; this switch only disables reset and automatic demo seeding.
 
@@ -385,11 +404,11 @@ At ~390px, stack workspace columns and render queue rows as readable cards or a 
 
 ### Required browser behavior
 
-- Hash routes `#/queue`, `#/submissions/new`, `#/submissions/{id}` work with back, forward, direct load, and refresh. Preserve queue filters in route query/state.
+- Real HTML URLs `/static/index.html`, `/static/submit.html`, and `/static/submission.html?id=<uuid>` work with ordinary links, back/forward, direct load, and refresh. `/` serves the queue. Preserve queue filters as specified in §3; missing/invalid detail IDs render a useful error with a queue link.
 - Loading, empty, no-results, network-error, 404, forbidden, and success states are intentionally rendered. Empty search results offer Clear filters.
 - Disable an action while its request is pending. Existing-record duplicate requests cannot duplicate decisions because of OCC. For creation, do not automatically retry an ambiguous network failure: tell the user to check their queue first. Full creation idempotency infrastructure is out of scope.
 - On 409, retain draft feedback/copy, fetch latest detail, explain the conflict, and require a fresh click after review; do not auto-replay the action.
-- Abort or discard outdated responses on route/persona changes so another persona's previous response never renders. Confirm before discarding unsaved form text on navigation/persona switch.
+- Abort or discard outdated responses on page unload/persona changes so another persona's previous response never renders. Confirm before discarding unsaved form text on navigation/persona switch.
 - Render all user text via `textContent`/safe DOM nodes. Highlight with text nodes and `<mark>`; never interpolate submitted text into `innerHTML`. Parameterize SQL. Never fetch the submitted URL from the server or embed it as an iframe. Optional link opens with `noopener noreferrer` after scheme validation.
 
 ## 11. Demo reset and runtime reliability
@@ -419,11 +438,28 @@ Tests must verify observable behavior and database invariants, not merely mirror
 | Browser/manual | Full walkthrough, version selection, create, reassignment, persona change, back/refresh, error handling, keyboard, 390px/1280px, no console errors |
 | Delivery | Docker cold start, persistence through restart, local clean install, deployed health and golden flow, accessible repository and README links |
 
-Python API/integration tests are required. Browser automation is optional if already available; a recorded manual checklist in `docs/VERIFICATION.md` satisfies UI verification and avoids introducing a Node stack. Record commands, results, date, tested commit, tested URL, and known limitations. Do not report manual/browser/deployed checks as passed unless actually performed.
+Python API/integration tests are required. A recorded manual browser checklist in `docs/VERIFICATION.md` satisfies UI verification. If automation is useful, use an already available browser tool or Python tooling; never add npm/npx or a JavaScript test/build dependency. HTTP tests must fetch all three real HTML pages and their referenced local JS/CSS successfully. Record commands, results, date, tested commit, tested URL, and known limitations. Do not report manual/browser/deployed checks as passed unless actually performed.
 
 ## 13. Kanban execution rules
 
-Copy each card below as a separate task. Include this document or its repository path **and the same plan revision** in every agent task. Each card's acceptance criteria include the relevant contract sections; task summaries cannot override them.
+For a new board, each K-card below can be a separate task. The existing ClearPath Hermes board uses the eight-task grouping below (seven pending tasks plus the scaffold task that was blocked by conflicting generated instructions); do not create duplicate K-card tasks. Include this document or its repository path **and the same plan revision** in every agent task. Each card's acceptance criteria include the relevant contract sections; task summaries cannot override them.
+
+### Existing Hermes board mapping
+
+These task IDs keep the existing dependency chain. Each group must satisfy all mapped K-card checks; the K-cards remain the detailed implementation checklist. Board task bodies point to this revision at `/Users/josh/Documents/Projects/promptarmortakehome/clearpath_takehome_build_plan.md`. Older workflow-draft attachments and generated TypeScript/DDD-monorepo instructions are superseded by this revision. Domain logic stays cleanly separated in Python modules; extra packages/ports/services are not required.
+
+| Existing task ID | Corrected task | K-card coverage |
+|---|---|---|
+| `t_2ecfae40` | Scaffold Python/FastAPI and plain HTML pages | K0 |
+| `t_0f7799dc` | Build SQLite schema and coherent demo seed | K1 |
+| `t_781f2642` | Define Python domain rules and validation | K2 |
+| `t_70cc992c` | Implement transactional workflow and policy checks | K3–K4 |
+| `t_9815f4a7` | Build FastAPI endpoints, queue, and metrics | K5–K6 |
+| `t_0b5fe210` | Build the multipage HTML/CSS/JS experience | K7–K12 |
+| `t_3a485c55` | Verify single-container deployment and persistence | K13 plus §14 container checks |
+| `t_bbd2c206` | Finalize docs, GitHub, live demo, and evidence | K14–K16 |
+
+Implement in that order in the project directory; use each parent’s committed result. Scratch task directories are not separate app roots. Do not edit an outdated plan attachment instead of this project plan. Record task ID and mapped K-card IDs in completion evidence.
 
 Suggested columns: Backlog → Ready → In progress → Verify → Done; use Blocked with a stated missing dependency when necessary. Work in progress limit: one implementation card. No simultaneous agents editing shared files. A later card may be started only once dependencies pass. K14 may be drafted during earlier work and finalized after K13; K15 hosting discovery begins at K0 even though final acceptance comes last.
 
@@ -444,7 +480,7 @@ Completion evidence: commit SHA, changed files, checks/results, limitations
 
 Global rules for Hermes/DeepSeek:
 
-1. Follow this stack, enums, policy constants, contracts, and permissions exactly. Do not add features or redesign workflow during implementation.
+1. Follow this stack, enums, policy constants, contracts, and permissions exactly. The frontend is three real HTML pages plus CSS/native JS; TypeScript, npm/npx, Node tooling, frontend package manifests, and SPA routing are prohibited in every task, including scaffolding, tests, and Docker. Do not add features or redesign workflow during implementation.
 2. Inspect repository instructions before work. Keep edits inside the assigned card and required integration fixes.
 3. All UI buttons must reach real endpoints; no mocked success, hardcoded counts, or hidden in-memory persistence in the delivered app.
 4. Use the smallest implementation that meets acceptance criteria. Resolve ordinary implementation choices autonomously and note them briefly. Escalate only genuine product/security/contract contradictions, quoting the conflicting sections; unrelated ready work may continue.
@@ -458,9 +494,9 @@ Global rules for Hermes/DeepSeek:
 
 **Dependencies:** none. **Contract:** §2–3, §14. **Files:** pyproject/lock, package skeleton, static shell, tests/conftest, Docker/Compose, ignore files, env example.
 
-Implement app factory/lifespan, minimal schema initialization hook, public health route, static root, Python test setup, one-process container, writable data volume, and launch configuration. Establish hosting choice (persistent container preferred; local ngrok fallback) and whether GitHub credentials/repository exist. Initialize Git if needed.
+Implement app factory/lifespan, minimal schema initialization hook, public health route, root FileResponse/static mount and the three HTML page skeletons, Python test setup, one-process container, writable data volume, and launch configuration. Establish hosting choice (persistent container preferred; local ngrok fallback) and whether GitHub credentials/repository exist. Initialize Git if needed.
 
-**Acceptance:** `uv sync` succeeds; `uv run pytest` passes; root and health return 200 locally and in container; container listens on `0.0.0.0`; repo excludes DB/secrets; hosting/GitHub prerequisites are recorded. Skeleton tests are replaced/extended as domain tables arrive. Missing credentials are surfaced now, not concealed until final card.
+**Acceptance:** `uv sync` succeeds; `uv run pytest` passes; root, all three HTML pages, their JS/CSS, and health return 200 locally and in container; no frontend package manifest or compile command exists; container listens on `0.0.0.0`; repo excludes DB/secrets; hosting/GitHub prerequisites are recorded. Skeleton tests are replaced/extended as domain tables arrive. Missing credentials are surfaced now, not concealed until final card.
 
 ### K1 — Schema and coherent seed · 1.5h
 
@@ -512,17 +548,17 @@ Expose create/assign/request-changes/resubmit/approve/reject/reset and normalize
 
 ### K7 — Queue, navigation, personas · 1.5h
 
-**Depends on:** K6. **Contract:** §7–10. **Files:** static HTML/JS/CSS.
+**Depends on:** K6. **Contract:** §7–10. **Files:** static/index.html, common.js, queue.js, styles.css.
 
-Build shell, API helper, hash routes, identity persistence, queue, metrics, filters, search, completed view, loading/empty/error states. Apply base visual tokens now.
+Build queue HTML, shared API/persona helpers, ordinary links to submit.html and submission.html, identity persistence, queue, metrics, URL-query filters, search, completed view, loading/empty/error states. Apply base visual tokens now.
 
-**Acceptance:** real API drives rows/counts; filters combine; completed CP-8905 is accessible; selection opens detail route; refresh/back retain useful context; stale persona fetches are discarded; 390px layout usable. No fake buttons or hardcoded metrics.
+**Acceptance:** real API drives rows/counts; filters combine; completed CP-8905 is accessible; selection follows a normal link to submission.html?id=<uuid>; refresh/back retain useful context; stale persona fetches are discarded; 390px layout usable. No fake buttons or hardcoded metrics.
 
 ### K8 — Review workspace and ownership · 2.5h
 
 **Depends on:** K7. **Contract:** §5–6, §9–10. **Files:** static assets.
 
-Build full version selector, safe copy highlighting, preflight, assignment/reassignment, decision forms, immutable timeline, terminal display, pending/error/conflict handling.
+Build submission.html and submission.js with full version selector, safe copy highlighting, preflight, assignment/reassignment, decision forms, immutable timeline, terminal display, pending/error/conflict handling.
 
 **Acceptance:** Sarah requests changes on CP-8904 through real API; Mark cannot decide Sarah's work; pending work can be assigned; rejection requires reason; old versions clearly read-only; blocked approval explains why; action failure preserves entered text; timeline shows version/actor/time/feedback.
 
@@ -530,7 +566,7 @@ Build full version selector, safe copy highlighting, preflight, assignment/reass
 
 **Depends on:** K8. **Contract:** §5, §8–10. **Files:** static assets.
 
-Build own submissions experience, latest feedback, copy/URL revision form, persona-switch continuity, v2 success handling.
+Extend index.html and submission.html with own submissions experience, latest feedback, inline copy/URL revision form, persona-switch continuity, v2 success handling.
 
 **Acceptance:** exact golden path through approved v2 works in browser; historical v1 remains selectable; switching persona keeps context and correct actions; unchanged revision is rejected clearly; no artificial “assign again” handoff after resubmit.
 
@@ -538,7 +574,7 @@ Build own submissions experience, latest feedback, copy/URL revision form, perso
 
 **Depends on:** K9. **Contract:** §4–5, §9–10. **Files:** static assets; API fixes only if needed.
 
-Build all intake fields, affiliate condition, validation/errors, pending submit state, successful detail navigation.
+Build submit.html and submit.js with all intake fields, affiliate condition, validation/errors, pending submit state, and normal navigation to submission.html?id=<uuid> on success.
 
 **Acceptance:** valid new affiliate request appears with assigned reviewer and v1/history; invalid fields display actionable messages; launch/date and URL rules honored; simulated ambiguous network failure does not auto-create a duplicate. New work changes queue/metrics.
 
@@ -616,7 +652,7 @@ Restart and confirm a test submission persists. `docker compose down` keeps volu
 
 At K0 choose an available container host with a persistent volume, or the explicit allowed fallback: run the local app/container and expose port 8000 with ngrok. No mandatory vendor in this plan; choose using available access, not a new architecture. For ngrok, keep both process and tunnel alive during evaluation, test any interstitial behavior, document limitations, and recheck the URL immediately before submitting. A real accessible URL is required; unavailable credentials are a concrete blocker, not license to invent one.
 
-Use the same locked application and seed path as local; store DB outside image/static root. Verify root, `/api/health`, frontend assets, persona calls, mutations, and refresh over the public origin. No cross-origin API config should be needed.
+Use the same locked application and seed path as local; store DB outside image/static root. Verify root, `/api/health`, frontend assets, persona calls, mutations, and refresh over the public origin. Verify all three direct HTML URLs and their native JS/CSS assets over the public origin. No cross-origin API config or frontend build should be needed.
 
 ### GitHub handoff
 
