@@ -220,7 +220,11 @@ def _build_seed(now: datetime) -> dict:
         "UNDER_REVIEW",
         1,
         None,
-        {"previous_reviewer": None, "assignment_method": "automatic"},
+        {
+            "assignee_id": user_ids["Sarah T."],
+            "previous_reviewer": None,
+            "assignment_method": "automatic",
+        },
     )
 
     # --- CP-8904 / ClearRewards Launch (under review, Sarah; walkthrough flow) ---
@@ -264,7 +268,11 @@ def _build_seed(now: datetime) -> dict:
         "UNDER_REVIEW",
         1,
         None,
-        {"previous_reviewer": None, "assignment_method": "automatic"},
+        {
+            "assignee_id": user_ids["Sarah T."],
+            "previous_reviewer": None,
+            "assignment_method": "automatic",
+        },
     )
 
     # --- CP-8905 / NerdWallet Debt Consolidation (approved, Mark) ---
@@ -308,7 +316,11 @@ def _build_seed(now: datetime) -> dict:
         "UNDER_REVIEW",
         1,
         None,
-        {"previous_reviewer": None, "assignment_method": "automatic"},
+        {
+            "assignee_id": user_ids["Mark Davis"],
+            "previous_reviewer": None,
+            "assignment_method": "automatic",
+        },
     )
     # Request changes on v1 at -6d.
     req_t = now + timedelta(days=-6)
@@ -430,7 +442,11 @@ def _build_seed(now: datetime) -> dict:
         "UNDER_REVIEW",
         1,
         None,
-        {"previous_reviewer": None, "assignment_method": "automatic"},
+        {
+            "assignee_id": user_ids["Mark Davis"],
+            "previous_reviewer": None,
+            "assignment_method": "automatic",
+        },
     )
     add_event(
         sid,
@@ -480,7 +496,11 @@ def _build_seed(now: datetime) -> dict:
         "UNDER_REVIEW",
         1,
         None,
-        {"previous_reviewer": None, "assignment_method": "automatic"},
+        {
+            "assignee_id": user_ids["Mark Davis"],
+            "previous_reviewer": None,
+            "assignment_method": "automatic",
+        },
     )
 
     # Finalize per-submission version/event counts. Version rows are
@@ -513,6 +533,8 @@ def _build_seed(now: datetime) -> dict:
 
 def _insert_seed(conn: sqlite3.Connection, now: datetime) -> None:
     """Insert baseline fixtures. No commit — caller owns the transaction."""
+    from clearpath.notifications import backfill
+
     seed = _build_seed(now)
     for uid, name, role, title, created in seed["users"]:
         conn.execute(
@@ -542,6 +564,7 @@ def _insert_seed(conn: sqlite3.Connection, now: datetime) -> None:
             "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             row,
         )
+    backfill(conn)
 
 
 def seed_database(conn: sqlite3.Connection, now: datetime) -> None:
@@ -558,7 +581,13 @@ def reset_database(db_path: Path | str, now: datetime) -> None:
     conn = db.connect(Path(db_path))
     try:
         conn.execute("BEGIN IMMEDIATE")
-        for table in ("audit_events", "submission_versions", "submissions", "users"):
+        for table in (
+            "notifications",
+            "audit_events",
+            "submission_versions",
+            "submissions",
+            "users",
+        ):
             conn.execute(f"DELETE FROM {table}")
         _insert_seed(conn, now)
         conn.commit()

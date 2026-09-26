@@ -495,7 +495,9 @@ def _event(
     comment=None,
     metadata=None,
 ):
-    conn.execute(
+    from clearpath.notifications import fanout_event
+
+    cur = conn.execute(
         """INSERT INTO audit_events
         (submission_id, actor_id, event_type, from_status, to_status, version_number, comment, metadata_json, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -510,6 +512,15 @@ def _event(
             json.dumps(metadata) if metadata else None,
             _iso(now),
         ),
+    )
+    fanout_event(
+        conn,
+        audit_event_id=cur.lastrowid,
+        submission_id=sid,
+        actor_id=actor,
+        event_type=event,
+        created_at=_iso(now),
+        metadata=metadata,
     )
 
 

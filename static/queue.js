@@ -123,21 +123,23 @@ async function load() {
   $('queue-state').textContent = 'No campaigns match this view. Clear your filters or start a new submission.';
 
   const pager = $('pager');
-  const prevOffset = Math.max(0, pageOffset - pageLimit);
-  const nextOffset = pageOffset + pageLimit;
-  const hasPrev = pageOffset > 0;
-  const hasNext = nextOffset < total;
-  const prev = el('a', 'Previous', hasPrev ? 'button quiet' : 'button quiet is-disabled');
-  prev.href = hasPrev ? queueHref(params, { offset: prevOffset, limit: pageLimit }) : '#';
-  prev.setAttribute('aria-disabled', hasPrev ? 'false' : 'true');
-  if (!hasPrev) prev.tabIndex = -1;
-  const next = el('a', 'Next', hasNext ? 'button quiet' : 'button quiet is-disabled');
-  next.href = hasNext ? queueHref(params, { offset: nextOffset, limit: pageLimit }) : '#';
-  next.setAttribute('aria-disabled', hasNext ? 'false' : 'true');
-  if (!hasNext) next.tabIndex = -1;
-  const summary = el('span', total === 0 ? 'No matching campaigns' : `Showing ${start}–${end} of ${total}`, 'pager-summary');
-  pager.replaceChildren(prev, summary, next);
-  pager.hidden = false;
+  if (pager) {
+    const prevOffset = Math.max(0, pageOffset - pageLimit);
+    const nextOffset = pageOffset + pageLimit;
+    const hasPrev = pageOffset > 0;
+    const hasNext = nextOffset < total;
+    const prev = el('a', 'Previous', hasPrev ? 'button quiet' : 'button quiet is-disabled');
+    prev.href = hasPrev ? queueHref(params, { offset: prevOffset, limit: pageLimit }) : '#';
+    prev.setAttribute('aria-disabled', hasPrev ? 'false' : 'true');
+    if (!hasPrev) prev.tabIndex = -1;
+    const next = el('a', 'Next', hasNext ? 'button quiet' : 'button quiet is-disabled');
+    next.href = hasNext ? queueHref(params, { offset: nextOffset, limit: pageLimit }) : '#';
+    next.setAttribute('aria-disabled', hasNext ? 'false' : 'true');
+    if (!hasNext) next.tabIndex = -1;
+    const summary = el('span', total === 0 ? 'No matching campaigns' : `Showing ${start}–${end} of ${total}`, 'pager-summary');
+    pager.replaceChildren(prev, summary, next);
+    pager.hidden = false;
+  }
 
   $('reset').hidden = !(config.demo_mode && actor.role === 'REVIEWER');
   $('reset').onclick = () => $('reset-dialog').showModal();

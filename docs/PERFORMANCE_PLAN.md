@@ -1,6 +1,6 @@
 # Performance improvement plan
 
-**Status: P0 implemented (bounded queue summaries + pagination, SQL metrics). Conditional P1 indexes and later write/network work remain.** Checked against the current API, queue UI, metrics implementation, schema initialization, tests, and [measured baseline](PERFORMANCE.md) / [P0 re-measure](benchmarks/p0-2026-09-26/).
+**Status: P0 shipped; metrics fast-path normalize re-measured (100k concurrent p95 ~266 ms).** Conditional P1 indexes / cache and later write/network work remain. See [PERFORMANCE.md](PERFORMANCE.md) and [metrics-fix-2026-09-26](benchmarks/metrics-fix-2026-09-26/).
 
 ## Recommendation and time budget
 
@@ -11,7 +11,7 @@ The original plan was a useful backlog but too large for that window: half a day
 | Priority | Change | Expected benefit and confidence | Budget |
 |---|---|---|---|
 | P0 ✓ | Summary-only queue, 50-row default, API + UI pagination together | **Done.** First-page queue at 100k: 50 rows, ~27 KiB, 3 SELECTs, concurrent p95 122 ms. | shipped |
-| P0 ✓ | SQL metrics with unchanged semantics | **Done.** Much faster than Python materialization; concurrent p95 at 100k still 3.7 s (scan/normalize cost). | shipped |
+| P0 ✓ | SQL metrics with unchanged semantics | **Done + fast-path follow-up.** Concurrent p95 at 100k: **266 ms** (was 5.56 s with boundary pad; 17 s baseline). Slightly over 250 ms budget. | shipped |
 | Required ✓ | Focused harness updates, regression checks, before/after evidence | **Done.** Suite green; artifacts in `docs/benchmarks/p0-2026-09-26/`. Browser re-measure not run. | shipped |
 | Setup ✓ | Confirm clean baseline, contract and fixture availability | Baseline preserved under `baseline-2026-09-25/`. | shipped |
 | Conditional P1 | One measured index improvement | Next: metrics/deep-page plans after P0 queries. | Separate 30–60 min |

@@ -2,8 +2,10 @@
 
 Reads are served directly from SQLite; mutations go through the workflow
 service layer which owns the write transaction and domain checks. Identity
-comes from `X-Demo-User-Id` (§5) — the backend resolves the user and never
-trusts role/actor IDs in request JSON. Unknown/missing identity returns 401.
+is injected via `CallerId` (§5 / clearpath.identity) — the backend resolves
+the user and never trusts role/actor IDs in request JSON. Unknown/missing
+identity returns 401. Demo transport is `X-Demo-User-Id`; production should
+swap only `extract_caller_id`.
 """
 
 from __future__ import annotations
@@ -15,12 +17,13 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
-from clearpath import db, metrics as metrics_mod, seed, workflow
+from clearpath import db, metrics as metrics_mod, notifications as notif_mod, seed, workflow
+from clearpath.identity import CallerId, resolve_actor
 from clearpath.preflight import run_preflight
 from clearpath.models import (
     ApproveRequest,
@@ -57,34 +60,6 @@ def demo_mode_enabled() -> bool:
 def _now() -> datetime:
     """One UTC clock per request (injected; tests may override via monkeypatch)."""
     return datetime.now(timezone.utc)
-
-
-def _resolve_actor(conn: sqlite3.Connection, user_id: str | None):
-    """Resolve the X-Demo-User-Id header to a user row.
-
-    Raises HTTPException(401) when missing/unknown. Returns a sqlite3.Row.
-    """
-    if not user_id:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": ErrorCode.UNAUTHENTICATED,
-                "message": "Missing X-Demo-User-Id",
-            },
-        )
-    row = conn.execute(
-        "SELECT id, name, role, display_title FROM users WHERE id = ?", (user_id,)
-    ).fetchone()
-    if row is None:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": ErrorCode.UNAUTHENTICATED,
-                "message": "Unknown demo user",
-                "details": {"user_id": user_id},
-            },
-        )
-    return row
 
 
 def _error(
@@ -303,8 +278,84 @@ def create_app() -> FastAPI:
         finally:
             conn.close()
 
+    @application.get("/api/notifications")
+    def list_notifications(
+        caller_id: CallerId,
+        limit: int = Query(20, ge=1, le=50),
+    ):
+        conn = db.connect()
+        try:
+            actor_row = resolve_actor(conn, caller_id)
+            items = notif_mod.list_for_user(conn, actor_row["id"], limit=limit)
+            return {
+                "notifications": items,
+                "unread_count": notif_mod.unread_count(conn, actor_row["id"]),
+            }
+        finally:
+            conn.close()
+
+    @application.post("/api/notifications/{notification_id}/read")
+    def read_notification(
+        notification_id: str,
+        caller_id: CallerId,
+    ):
+        conn = db.connect()
+        try:
+            actor_row = resolve_actor(conn, caller_id)
+            now = _now().isoformat().replace("+00:00", "Z")
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                exists = conn.execute(
+                    "SELECT id FROM notifications WHERE id = ? AND recipient_id = ?",
+                    (notification_id, actor_row["id"]),
+                ).fetchone()
+                if exists is None:
+                    conn.execute("ROLLBACK")
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "code": ErrorCode.NOT_FOUND,
+                            "message": "Notification not found",
+                        },
+                    )
+                notif_mod.mark_read(
+                    conn, actor_row["id"], notification_id, now=now
+                )
+                conn.execute("COMMIT")
+            except HTTPException:
+                raise
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+            return {
+                "ok": True,
+                "unread_count": notif_mod.unread_count(conn, actor_row["id"]),
+            }
+        finally:
+            conn.close()
+
+    @application.post("/api/notifications/read-all")
+    def read_all_notifications(
+        caller_id: CallerId,
+    ):
+        conn = db.connect()
+        try:
+            actor_row = resolve_actor(conn, caller_id)
+            now = _now().isoformat().replace("+00:00", "Z")
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                updated = notif_mod.mark_all_read(conn, actor_row["id"], now=now)
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+            return {"ok": True, "updated": updated, "unread_count": 0}
+        finally:
+            conn.close()
+
     @application.get("/api/submissions")
     def list_submissions(
+        caller_id: CallerId,
         mine: bool | None = None,
         reviewer: str | None = None,
         status: str | None = None,
@@ -313,11 +364,10 @@ def create_app() -> FastAPI:
         risk: bool = False,
         limit: int = Query(50, ge=1, le=100),
         offset: int = Query(0, ge=0),
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
     ):
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             now = _now()
             where = []
             params: list = []
@@ -398,11 +448,11 @@ def create_app() -> FastAPI:
     @application.get("/api/submissions/{submission_id}")
     def submission_detail(
         submission_id: str,
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
+        caller_id: CallerId,
     ):
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             row = _enforce_visible(conn, actor_row, submission_id)
             detail = _projection(conn, row)
             detail["allowed_actions"] = _allowed_actions(actor_row, row)
@@ -414,11 +464,11 @@ def create_app() -> FastAPI:
     @application.get("/api/submissions/{submission_id}/history")
     def submission_history(
         submission_id: str,
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
+        caller_id: CallerId,
     ):
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             row = _enforce_visible(conn, actor_row, submission_id)
             versions = conn.execute(
                 "SELECT version_number, asset_url, copy_text, created_by, created_at "
@@ -448,11 +498,11 @@ def create_app() -> FastAPI:
 
     @application.get("/api/metrics")
     def metrics(
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
+        caller_id: CallerId,
     ):
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             return metrics_mod.compute_metrics(
                 conn,
                 _now(),
@@ -468,11 +518,11 @@ def create_app() -> FastAPI:
     @application.post("/api/submissions", status_code=201)
     def create_submission(
         payload: IntakeRequest,
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
+        caller_id: CallerId,
     ):
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             try:
                 result = workflow.create_submission(
                     conn,
@@ -496,11 +546,11 @@ def create_app() -> FastAPI:
     def assign_submission(
         submission_id: str,
         payload: AssignRequest,
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
+        caller_id: CallerId,
     ):
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             try:
                 result = workflow.assign_submission(
                     conn,
@@ -521,11 +571,11 @@ def create_app() -> FastAPI:
     def request_changes(
         submission_id: str,
         payload: RequestChangesRequest,
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
+        caller_id: CallerId,
     ):
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             try:
                 result = workflow.request_changes(
                     conn,
@@ -545,11 +595,11 @@ def create_app() -> FastAPI:
     def resubmit_submission(
         submission_id: str,
         payload: ResubmitRequest,
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
+        caller_id: CallerId,
     ):
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             try:
                 result = workflow.resubmit_submission(
                     conn,
@@ -570,11 +620,11 @@ def create_app() -> FastAPI:
     def approve_submission(
         submission_id: str,
         payload: ApproveRequest,
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
+        caller_id: CallerId,
     ):
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             try:
                 result = workflow.approve_submission(
                     conn,
@@ -594,11 +644,11 @@ def create_app() -> FastAPI:
     def reject_submission(
         submission_id: str,
         payload: RejectRequest,
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
+        caller_id: CallerId,
     ):
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             try:
                 result = workflow.reject_submission(
                     conn,
@@ -616,12 +666,12 @@ def create_app() -> FastAPI:
 
     @application.post("/api/demo/reset")
     def demo_reset(
-        x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
+        caller_id: CallerId,
     ):
         """Demo-only reset: wipe all rows and reseed (requires a reviewer persona)."""
         conn = db.connect()
         try:
-            actor_row = _resolve_actor(conn, x_demo_user_id)
+            actor_row = resolve_actor(conn, caller_id)
             if actor_row["role"] != "REVIEWER":
                 return _error(ErrorCode.FORBIDDEN, "Reset requires a reviewer", 403)
             if not demo_mode_enabled():

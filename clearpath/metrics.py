@@ -124,6 +124,28 @@ def queue(
     return items
 
 
+def _utc_comparable(column: str) -> str:
+    """Normalize a stored UTC ISO timestamp for lexicographic comparison.
+
+    Pads fractional seconds to six digits so ``…:00Z`` and ``…:00.000000Z``
+    compare as the same instant. Common whole-second ``Z`` / ``+00:00`` forms
+    take a cheap GLOB fast path; mixed fractional forms use the full pad.
+    """
+    normalized = f"REPLACE(REPLACE({column}, 'Z', ''), '+00:00', '')"
+    full_pad = (
+        f"(SUBSTR({column}, 1, 19) || '.' || "
+        f"SUBSTR(SUBSTR({normalized}, 21) || '000000', 1, 6))"
+    )
+    return (
+        f"(CASE "
+        f"WHEN {column} GLOB '????-??-??T??:??:??Z' "
+        f"THEN SUBSTR({column}, 1, 19) || '.000000' "
+        f"WHEN {column} GLOB '????-??-??T??:??:??+00:00' "
+        f"THEN SUBSTR({column}, 1, 19) || '.000000' "
+        f"ELSE {full_pad} END)"
+    )
+
+
 def compute_metrics(
     conn: sqlite3.Connection,
     now: datetime,
@@ -134,6 +156,8 @@ def compute_metrics(
     """Return the §7 metrics envelope for the current persona's visible set.
 
     Aggregates in SQL so large corpora are not materialized and sorted in Python.
+    Open and terminal work are scanned separately so status indexes apply, and
+    timestamp normalization runs once per compared column via a subquery.
     """
     clauses: list[str] = []
     params: list = []
@@ -145,85 +169,76 @@ def compute_metrics(
         params.append(actor_id)
     scope_sql = (" AND " + " AND ".join(clauses)) if clauses else ""
 
-    # Stored timestamps are UTC. Pad fractional seconds to six places so
-    # equivalent instants (including .000000) compare equally at boundaries.
-    def ts(column: str) -> str:
-        normalized = f"REPLACE(REPLACE({column}, 'Z', ''), '+00:00', '')"
-        return (
-            f"(SUBSTR({column}, 1, 19) || '.' || "
-            f"SUBSTR(SUBSTR({normalized}, 21) || '000000', 1, 6))"
-        )
-
     now_s = _bind_ts(now)
     cutoff_7 = _bind_ts(now - timedelta(days=7))
     cutoff_30 = _bind_ts(now - timedelta(days=30))
     open_ph = ",".join("?" for _ in OPEN_STATUSES)
     terminal_ph = ",".join("?" for _ in TERMINAL_STATUSES)
+    sla_n = _utc_comparable("sla_breach_at")
+    decided_n = _utc_comparable("decided_at")
+    submitted_n = _utc_comparable("submitted_at")
 
-    sql = f"""
+    open_sql = f"""
         SELECT
-          COALESCE(SUM(CASE WHEN status IN ({open_ph}) THEN 1 ELSE 0 END), 0)
-            AS open_count,
-          COALESCE(SUM(CASE WHEN status IN ({open_ph})
-            AND {ts("sla_breach_at")} <= ? THEN 1 ELSE 0 END), 0)
+          COUNT(*) AS open_count,
+          COALESCE(SUM(CASE WHEN {sla_n} <= ? THEN 1 ELSE 0 END), 0)
             AS sla_breached_count,
-          COALESCE(SUM(CASE WHEN status IN ({open_ph})
-            AND assigned_reviewer_id IS NULL THEN 1 ELSE 0 END), 0)
-            AS unassigned_count,
-          COALESCE(SUM(CASE WHEN status IN ({terminal_ph})
-            AND decided_at IS NOT NULL
-            AND {ts("decided_at")} >= ?
-            AND {ts("decided_at")} <= ?
-            THEN 1 ELSE 0 END), 0)
+          COALESCE(SUM(CASE WHEN assigned_reviewer_id IS NULL THEN 1 ELSE 0 END), 0)
+            AS unassigned_count
+        FROM submissions
+        WHERE status IN ({open_ph}){scope_sql}
+    """
+    terminal_sql = f"""
+        SELECT
+          COALESCE(SUM(CASE WHEN decided_n >= ? AND decided_n <= ? THEN 1 ELSE 0 END), 0)
             AS completed_last_7_days,
-          AVG(CASE WHEN status IN ({terminal_ph})
-            AND decided_at IS NOT NULL
-            AND {ts("decided_at")} >= ?
-            AND {ts("decided_at")} <= ?
-            AND {ts("decided_at")} >= {ts("submitted_at")}
-            THEN (julianday({ts("decided_at")}) - julianday({ts("submitted_at")}))
+          AVG(CASE WHEN decided_n >= ? AND decided_n <= ?
+            AND decided_n >= submitted_n
+            THEN (julianday(decided_n) - julianday(submitted_n))
             ELSE NULL END)
             AS avg_turnaround_days,
-          COALESCE(SUM(CASE WHEN status IN ({terminal_ph})
-            AND decided_at IS NOT NULL
-            AND {ts("decided_at")} >= ?
-            AND {ts("decided_at")} <= ?
-            AND {ts("decided_at")} >= {ts("submitted_at")}
-            THEN 1 ELSE 0 END), 0)
+          COALESCE(SUM(CASE WHEN decided_n >= ? AND decided_n <= ?
+            AND decided_n >= submitted_n THEN 1 ELSE 0 END), 0)
             AS turnaround_sample_size
-        FROM submissions
-        WHERE 1=1{scope_sql}
+        FROM (
+          SELECT
+            {decided_n} AS decided_n,
+            {submitted_n} AS submitted_n
+          FROM submissions
+          WHERE status IN ({terminal_ph})
+            AND decided_at IS NOT NULL{scope_sql}
+        )
     """
-    bind = [
-        *OPEN_STATUSES,
-        *OPEN_STATUSES,
-        now_s,
-        *OPEN_STATUSES,
-        *TERMINAL_STATUSES,
-        cutoff_7,
-        now_s,
-        *TERMINAL_STATUSES,
-        cutoff_30,
-        now_s,
-        *TERMINAL_STATUSES,
-        cutoff_30,
-        now_s,
-        *params,
-    ]
-    row = conn.execute(sql, bind).fetchone()
-    sample_size = int(row["turnaround_sample_size"])
-    avg_raw = row["avg_turnaround_days"]
+    open_row = conn.execute(
+        open_sql, [now_s, *OPEN_STATUSES, *params]
+    ).fetchone()
+    terminal_row = conn.execute(
+        terminal_sql,
+        [
+            cutoff_7,
+            now_s,
+            cutoff_30,
+            now_s,
+            cutoff_30,
+            now_s,
+            *TERMINAL_STATUSES,
+            *params,
+        ],
+    ).fetchone()
+
+    sample_size = int(terminal_row["turnaround_sample_size"])
+    avg_raw = terminal_row["avg_turnaround_days"]
     avg_turnaround_days: float | None = None
     if sample_size > 0 and avg_raw is not None:
         avg_turnaround_days = round(float(avg_raw), 1)
 
     return {
-        "open_count": int(row["open_count"]),
-        "sla_breached_count": int(row["sla_breached_count"]),
-        "unassigned_count": int(row["unassigned_count"]),
+        "open_count": int(open_row["open_count"]),
+        "sla_breached_count": int(open_row["sla_breached_count"]),
+        "unassigned_count": int(open_row["unassigned_count"]),
         "avg_turnaround_days": avg_turnaround_days,
         "turnaround_sample_size": sample_size,
-        "completed_last_7_days": int(row["completed_last_7_days"]),
+        "completed_last_7_days": int(terminal_row["completed_last_7_days"]),
         "scope": scope,
         "as_of": _iso(now),
     }

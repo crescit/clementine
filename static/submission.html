@@ -28,25 +28,25 @@
 </section>
 <div class="review-layout">
 <div class="review-content">
-<section class="panel">
+<section class="panel" id="copy-panel">
 <div class="panel-heading">
-<div><p class="eyebrow">REVIEW ARTIFACT</p><h2>Campaign copy</h2>
-</div><label class="version-label">Content version<select id="version"></select></label>
+<div><p class="eyebrow">REVIEW ARTIFACT</p><h2 id="copy-heading">Campaign copy</h2>
+</div><label class="version-label" id="version-label">Content version<select id="version"></select></label>
 </div>
 <div class="panel-body"><p id="version-meta" class="muted"></p>
+<div id="copy-view">
 <div id="copy" class="copy-preview">
 </div>
 <div id="asset" class="asset-context">
 </div><p class="small">Review covers the pasted copy. Linked pages and visual assets are context only.</p>
 </div>
-</section>
-<section id="revision-panel" class="panel" hidden>
-<div class="panel-heading">
-<div><p class="eyebrow">NEXT STEP</p><h2>Revise and resubmit</h2>
-</div>
-</div>
-<form id="revision-form" class="panel-body form-stack"><label>Revised copy <span class="small">1–20,000 characters</span><textarea id="revision-copy" name="copy_text" required maxlength="20000" rows="8"></textarea></label><label>Asset URL <span class="small">Optional · http(s) · max 2,048 characters</span><input id="revision-url" name="asset_url" type="url" maxlength="2048"></label><p class="small">A revision creates a new version and retains the original review deadline.</p><button type="submit" class="primary">Submit revised version →</button>
+<form id="revision-form" class="form-stack" hidden>
+<label>Revised copy <span id="revision-hint" class="small">Creates the next version · 1–20,000 characters</span><textarea id="revision-copy" name="copy_text" required maxlength="20000" rows="10"></textarea></label>
+<label>Asset URL <span class="small">Optional · http(s) · max 2,048 characters</span><input id="revision-url" name="asset_url" type="url" maxlength="2048"></label>
+<p class="small">Saving creates a new version and keeps the original review deadline.</p>
+<button type="submit" class="primary">Save &amp; resubmit →</button>
 </form>
+</div>
 </section>
 <section class="panel">
 <div class="panel-heading">
@@ -58,17 +58,7 @@
 </section>
 </div>
 <aside class="review-sidebar">
-<section class="panel">
-<div class="panel-heading">
-<div><p class="eyebrow">DEMO POLICY CHECK</p><h2 id="preflight-title">Preflight</h2>
-</div>
-</div>
-<div class="panel-body"><p id="preflight-summary"></p>
-<div id="findings">
-</div><p class="small">Deterministic checks against fictional ClearPath policies. A passing check still requires a reviewer’s decision.</p>
-</div>
-</section>
-<section class="panel">
+<section id="next-action-panel" class="panel">
 <div class="panel-heading"><h2>Next action</h2>
 </div>
 <div class="panel-body"><p id="next-action"></p>
@@ -78,6 +68,16 @@
 </form>
 <form id="assign-form" class="form-stack" hidden><hr><label>Assigned reviewer<select id="assign-reviewer"></select></label><label>Assignment reason <span class="small">Required when replacing a reviewer · max 2,000</span><textarea id="assign-comment" rows="2" maxlength="2000"></textarea></label><button type="submit">Update assignment</button>
 </form>
+</div>
+</section>
+<section class="panel">
+<div class="panel-heading">
+<div><p class="eyebrow">DEMO POLICY CHECK</p><h2 id="preflight-title">Preflight</h2>
+</div>
+</div>
+<div class="panel-body"><p id="preflight-summary"></p>
+<div id="findings">
+</div><p class="small">Deterministic checks against fictional ClearPath policies. A passing check still requires a reviewer’s decision.</p>
 </div>
 </section>
 </aside>
