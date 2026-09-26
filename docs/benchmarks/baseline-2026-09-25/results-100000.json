@@ -1,0 +1,252 @@
+{
+  "phases": [
+    {
+      "name": "queue_sequential",
+      "requests": 3,
+      "successes": 3,
+      "errors": 0,
+      "status_counts": {
+        "200": 3
+      },
+      "duration_seconds": 10.068,
+      "successful_rps": 0.3,
+      "latency_ms": {
+        "p50": 3381.73,
+        "p95": 3406.57,
+        "p99": 3406.57,
+        "max": 3406.57
+      },
+      "decoded_response_bytes": 330431937,
+      "response_bytes_p50": 110143979,
+      "concurrency": 1,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions"
+      ]
+    },
+    {
+      "name": "queue_concurrent",
+      "requests": 4,
+      "successes": 4,
+      "errors": 0,
+      "status_counts": {
+        "200": 4
+      },
+      "duration_seconds": 14.508,
+      "successful_rps": 0.28,
+      "latency_ms": {
+        "p50": 7023.96,
+        "p95": 7482.84,
+        "p99": 7482.84,
+        "max": 7482.84
+      },
+      "decoded_response_bytes": 440575916,
+      "response_bytes_p50": 110143979,
+      "concurrency": 2,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions"
+      ]
+    },
+    {
+      "name": "metrics_concurrent",
+      "requests": 15,
+      "successes": 15,
+      "errors": 0,
+      "status_counts": {
+        "200": 15
+      },
+      "duration_seconds": 49.794,
+      "successful_rps": 0.3,
+      "latency_ms": {
+        "p50": 16417.67,
+        "p95": 17105.3,
+        "p99": 17105.3,
+        "max": 17105.3
+      },
+      "decoded_response_bytes": 3225,
+      "response_bytes_p50": 215,
+      "concurrency": 5,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/metrics"
+      ]
+    },
+    {
+      "name": "detail_concurrent",
+      "requests": 200,
+      "successes": 200,
+      "errors": 0,
+      "status_counts": {
+        "200": 200
+      },
+      "duration_seconds": 0.377,
+      "successful_rps": 530.84,
+      "latency_ms": {
+        "p50": 21.54,
+        "p95": 101.49,
+        "p99": 177.43,
+        "max": 243.37
+      },
+      "decoded_response_bytes": 247800,
+      "response_bytes_p50": 1127,
+      "concurrency": 20,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions/6b65a6a4-8b81-48f6-b38a-088ca65ed389",
+        "/api/submissions/6b65a6a4-8b81-48f6-b38a-088ca65ed389/history"
+      ]
+    },
+    {
+      "name": "search_concurrent",
+      "requests": 20,
+      "successes": 20,
+      "errors": 0,
+      "status_counts": {
+        "200": 20
+      },
+      "duration_seconds": 0.281,
+      "successful_rps": 71.26,
+      "latency_ms": {
+        "p50": 66.59,
+        "p95": 87.94,
+        "p99": 92.15,
+        "max": 92.15
+      },
+      "decoded_response_bytes": 2194440,
+      "response_bytes_p50": 109722,
+      "concurrency": 5,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions?search=Campaign%200009"
+      ]
+    },
+    {
+      "name": "mixed_concurrent",
+      "requests": 15,
+      "successes": 15,
+      "errors": 0,
+      "status_counts": {
+        "200": 15
+      },
+      "duration_seconds": 16.812,
+      "successful_rps": 0.89,
+      "latency_ms": {
+        "p50": 7.5,
+        "p95": 12651.95,
+        "p99": 12651.95,
+        "max": 12651.95
+      },
+      "decoded_response_bytes": 330443397,
+      "response_bytes_p50": 1127,
+      "concurrency": 3,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions/6b65a6a4-8b81-48f6-b38a-088ca65ed389",
+        "/api/submissions/6b65a6a4-8b81-48f6-b38a-088ca65ed389/history",
+        "/api/submissions/6b65a6a4-8b81-48f6-b38a-088ca65ed389",
+        "/api/submissions",
+        "/api/metrics"
+      ]
+    },
+    {
+      "name": "write_lifecycle",
+      "requests": 20,
+      "successes": 20,
+      "errors": 0,
+      "status_counts": {
+        "complete": 20
+      },
+      "duration_seconds": 4.031,
+      "successful_rps": 4.96,
+      "latency_ms": {
+        "p50": 977.2,
+        "p95": 3811.12,
+        "p99": 4020.18,
+        "max": 4020.18
+      },
+      "decoded_response_bytes": 51020,
+      "response_bytes_p50": 2551,
+      "concurrency": 10,
+      "unit": "four-step lifecycle",
+      "planned_writes": 80,
+      "failures": []
+    },
+    {
+      "name": "contested_decision",
+      "requests": 20,
+      "successes": 20,
+      "errors": 0,
+      "status_counts": {
+        "200": 1,
+        "409": 19
+      },
+      "duration_seconds": 0.044,
+      "successful_rps": 451.87,
+      "latency_ms": {
+        "p50": 25.8,
+        "p95": 39.49,
+        "p99": 40.03,
+        "max": 40.03
+      },
+      "decoded_response_bytes": 3683,
+      "response_bytes_p50": 161,
+      "concurrency": 20,
+      "correct": true
+    }
+  ],
+  "integrity": {
+    "completed_lifecycles_verified": 20,
+    "failures": [],
+    "contested_approval_events": 1,
+    "foreign_key_errors": 0,
+    "integrity": "ok"
+  },
+  "query_plans": {
+    "queue": [
+      "SEARCH submissions USING INDEX idx_submissions_status (status=?)",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "next_external_id": [
+      "SEARCH submissions USING COVERING INDEX sqlite_autoindex_submissions_2"
+    ],
+    "reviewer_load": [
+      "SCAN u USING INDEX sqlite_autoindex_users_1",
+      "SEARCH s USING INDEX idx_submissions_reviewer (assigned_reviewer_id=?) LEFT-JOIN",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ]
+  },
+  "post_load_metrics": {
+    "open_count": 60006,
+    "sla_breached_count": 58070,
+    "unassigned_count": 10002,
+    "avg_turnaround_days": 2.5,
+    "turnaround_sample_size": 14562,
+    "completed_last_7_days": 4320,
+    "scope": "all_submissions",
+    "as_of": "2026-09-26T06:17:24Z"
+  },
+  "server_peak_sampled_rss_mib": 1070.7,
+  "memory_sampling": "server RSS sampled once per second; short peaks may be missed",
+  "fixture": {
+    "database": "docs/benchmarks/baseline-2026-09-25/scale-100000.db",
+    "seed": 42,
+    "as_of": "2026-09-26T06:15:21Z",
+    "counts": {
+      "users": 240,
+      "submissions": 100000,
+      "submission_versions": 122000,
+      "audit_events": 288993,
+      "statuses": {
+        "APPROVED": 34999,
+        "CHANGES_REQUESTED": 15001,
+        "PENDING_ASSIGNMENT": 10002,
+        "REJECTED": 4995,
+        "UNDER_REVIEW": 35003
+      }
+    },
+    "database_bytes": 325607424,
+    "synthetic": true
+  },
+  "server_pid": 22750
+}

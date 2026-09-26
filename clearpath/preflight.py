@@ -35,19 +35,41 @@ FORBID_REGEX: dict[str, str] = {
 # (rule_id, products, channels, title, message). Products/channels are None
 # for "all". Disclosure rules are scoped per §6.
 _RULES: list[tuple[str, set[Product] | None, set[Channel] | None, str, str]] = [
-    ("CLAIM_001", None, None, "Restricted approval claim",
-     "Demo policy requires pre-qualified; confirm offer accuracy."),
-    ("CLAIM_002", None, None, "Guaranteed approval claim",
-     "Remove the guarantee; approval remains subject to review."),
-    ("DISC_001", {Product.PERSONAL_LOAN, Product.CREDIT_CARD}, None,
-     "Missing credit approval disclosure",
-     "Add the exact demo disclosure: Subject to credit approval."),
-    ("DISC_002", {Product.MORTGAGE_PREQUALIFICATION}, None,
-     "Missing mortgage prequalification disclosure",
-     "Add the exact demo disclosure: Prequalification is not a commitment to lend."),
-    ("DISC_003", None, {Channel.AFFILIATE},
-     "Missing partner disclosure",
-     "Add the exact demo partner disclosure: ClearPath may compensate this partner."),
+    (
+        "CLAIM_001",
+        None,
+        None,
+        "Restricted approval claim",
+        "Demo policy requires pre-qualified; confirm offer accuracy.",
+    ),
+    (
+        "CLAIM_002",
+        None,
+        None,
+        "Guaranteed approval claim",
+        "Remove the guarantee; approval remains subject to review.",
+    ),
+    (
+        "DISC_001",
+        {Product.PERSONAL_LOAN, Product.CREDIT_CARD},
+        None,
+        "Missing credit approval disclosure",
+        "Add the exact demo disclosure: Subject to credit approval.",
+    ),
+    (
+        "DISC_002",
+        {Product.MORTGAGE_PREQUALIFICATION},
+        None,
+        "Missing mortgage prequalification disclosure",
+        "Add the exact demo disclosure: Prequalification is not a commitment to lend.",
+    ),
+    (
+        "DISC_003",
+        None,
+        {Channel.AFFILIATE},
+        "Missing partner disclosure",
+        "Add the exact demo partner disclosure: ClearPath may compensate this partner.",
+    ),
 ]
 
 
@@ -67,16 +89,13 @@ def _rule_applies(rule, product: Product, channel: Channel) -> bool:
 def _codepoint_offset(text: str, utf16_index: int) -> int:
     """Convert a UTF-16 string index to a Unicode code-point offset.
 
-    Python string indexing is UTF-16 code-unit based, but the demo policy
-    requires finding offsets to be Unicode code points so the JS frontend can
-    slice highlights with Array.from(copy) semantics (emoji never shift spans).
+    Python already indexes Unicode code points. Keep these offsets unchanged
+    so the JS frontend can slice using Array.from(copy), including emoji.
     """
     return sum(1 for char in text[:utf16_index])
 
 
-def scan_copy(
-    product: Product, channel: Channel, copy_text: str
-) -> list[dict]:
+def scan_copy(product: Product, channel: Channel, copy_text: str) -> list[dict]:
     """Run the frozen demo policy against pasted copy.
 
     Returns findings as dicts: rule_id, severity, title, message, matched_text,
@@ -86,40 +105,44 @@ def scan_copy(
     """
     findings: list[dict] = []
     for rule_id, products, channels, title, message in _RULES:
-        if not _rule_applies((rule_id, products, channels, title, message), product, channel):
+        if not _rule_applies(
+            (rule_id, products, channels, title, message), product, channel
+        ):
             continue
 
         if rule_id.startswith("CLAIM"):
             regex = re.compile(FORBID_REGEX[rule_id], re.IGNORECASE)
             for match in regex.finditer(copy_text):
                 matched = match.group(0)
-                findings.append({
-                    "rule_id": rule_id,
-                    "severity": Severity.BLOCKING.value,
-                    "title": title,
-                    "matched_text": matched,
-                    "start": _codepoint_offset(copy_text, match.start()),
-                    "end": _codepoint_offset(copy_text, match.end()),
-                    "message": message,
-                })
+                findings.append(
+                    {
+                        "rule_id": rule_id,
+                        "severity": Severity.BLOCKING.value,
+                        "title": title,
+                        "matched_text": matched,
+                        "start": _codepoint_offset(copy_text, match.start()),
+                        "end": _codepoint_offset(copy_text, match.end()),
+                        "message": message,
+                    }
+                )
         elif rule_id.startswith("DISC"):
             normalized = _normalize_for_disclosure(copy_text)
             if DISCLOSURE_TEXT[rule_id].casefold() not in normalized:
-                findings.append({
-                    "rule_id": rule_id,
-                    "severity": Severity.BLOCKING.value,
-                    "title": title,
-                    "matched_text": None,
-                    "start": None,
-                    "end": None,
-                    "message": message,
-                })
+                findings.append(
+                    {
+                        "rule_id": rule_id,
+                        "severity": Severity.BLOCKING.value,
+                        "title": title,
+                        "matched_text": None,
+                        "start": None,
+                        "end": None,
+                        "message": message,
+                    }
+                )
     return findings
 
 
-def run_preflight(
-    product: Product, channel: Channel, copy_text: str
-) -> dict:
+def run_preflight(product: Product, channel: Channel, copy_text: str) -> dict:
     """Return the §6 preflight envelope: policy_version, passed, findings."""
     findings = scan_copy(product, channel, copy_text)
     return {
@@ -130,6 +153,9 @@ def run_preflight(
 
 
 __all__ = [
-    "POLICY_VERSION", "DISCLOSURE_TEXT", "FORBID_REGEX", "scan_copy",
+    "POLICY_VERSION",
+    "DISCLOSURE_TEXT",
+    "FORBID_REGEX",
+    "scan_copy",
     "run_preflight",
 ]

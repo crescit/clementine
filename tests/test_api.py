@@ -1,8 +1,21 @@
-"""API smoke tests for K0 bootstrap. Domain endpoint suites land in K5–K6."""
+"""API smoke tests for K0 bootstrap + K5-K6 domain endpoint suites.
+
+K0: health, root, static pages.
+K5-K6: identity (X-Demo-User-Id), submission reads/writes, workflow
+mutations, metrics, history, error envelope mapping (401/403/404/409/503).
+"""
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from datetime import datetime, timezone
+
+import pytest
 from fastapi.testclient import TestClient
+
+from clearpath import db, seed
+
+# --- K0 smoke ------------------------------------------------------------------
 
 
 def test_health_ok(client: TestClient) -> None:
@@ -26,7 +39,7 @@ def test_static_pages_available(client: TestClient) -> None:
     index = client.get("/static/index.html").content
     assert b"queue.js" in index
     # Each page wires its own native module script (queue.js / submission.js / submit.js).
-    assert b"type=\"module\"" in index
+    assert b'type="module"' in index
     assert b"submission.js" in client.get("/static/submission.html").content
     assert b"submit.js" in client.get("/static/submit.html").content
     # All pages import the shared common.js seam.
@@ -44,3 +57,388 @@ def test_static_assets_available(client: TestClient) -> None:
     ]:
         response = client.get(f"/static/{asset}")
         assert response.status_code == 200, f"{asset} failed"
+
+
+# --- K5-K6 helpers --------------------------------------------------------------
+
+
+@pytest.fixture
+def seeded_client(
+    client: TestClient, temp_db, frozen_now, monkeypatch
+) -> Generator[TestClient, None, None]:
+    """Seed the temp DB with the 3 demo personas + backlog before API calls."""
+    seed.reset_database(db.get_database_path(), frozen_now)
+    monkeypatch.setattr("clearpath.api._now", lambda: frozen_now)
+    yield client
+
+
+def _users(seeded_client: TestClient) -> dict[str, str]:
+    resp = seeded_client.get("/api/users")
+    assert resp.status_code == 200
+    users = resp.json()["users"]
+    submitter = next(u for u in users if u["role"] == "SUBMITTER")
+    reviewers = [u for u in users if u["role"] == "REVIEWER"]
+    assert reviewers, "expected at least 2 reviewers"
+    return {
+        "submitter": submitter["id"],
+        "reviewer_a": reviewers[0]["id"],
+        "reviewer_b": reviewers[1]["id"],
+    }
+
+
+def _create(seeded_client: TestClient, submitter: str, **overrides) -> dict:
+    payload = {
+        "title": "Spring Loan Campaign",
+        "copy_text": "Subject to credit approval.",
+        "channel": "WEBSITE",
+        "product": "PERSONAL_LOAN",
+        "target_launch_date": datetime.now(timezone.utc).date().isoformat(),
+    }
+    payload.update(overrides)
+    resp = seeded_client.post(
+        "/api/submissions", json=payload, headers={"X-Demo-User-Id": submitter}
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+# --- Identity (§5) ---------------------------------------------------------------
+
+
+def test_missing_identity_401(seeded_client: TestClient) -> None:
+    resp = seeded_client.get("/api/submissions")
+    assert resp.status_code == 401
+    assert resp.json()["code"] == "UNAUTHENTICATED"
+
+
+def test_unknown_identity_401(seeded_client: TestClient) -> None:
+    resp = seeded_client.get(
+        "/api/submissions", headers={"X-Demo-User-Id": "does-not-exist"}
+    )
+    assert resp.status_code == 401
+    assert resp.json()["code"] == "UNAUTHENTICATED"
+
+
+def test_users_endpoint_lists_personas(seeded_client: TestClient) -> None:
+    resp = seeded_client.get("/api/users")
+    assert resp.status_code == 200
+    users = resp.json()["users"]
+    roles = {u["role"] for u in users}
+    assert roles == {"SUBMITTER", "REVIEWER"}
+    assert all(u["display_title"] for u in users)
+
+
+# Integration tests exercise the real database, automatic assignment, and API.
+def headers(uid):
+    return {"X-Demo-User-Id": uid}
+
+
+def get_record(client, sid, uid):
+    response = client.get(f"/api/submissions/{sid}", headers=headers(uid))
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def act(client, record, uid, action, **body):
+    return client.post(
+        f"/api/submissions/{record['id']}/{action}",
+        headers=headers(uid),
+        json={"expected_record_version": record["record_version"], **body},
+    )
+
+
+def test_creation_auto_assignment_and_deadline(seeded_client):
+    ids = _users(seeded_client)
+    created = _create(
+        seeded_client, ids["submitter"], channel="AFFILIATE", partner="Example Partner"
+    )
+    assert created["status"] == "UNDER_REVIEW"
+    assert (
+        created["assigned_reviewer_id"] == ids["reviewer_a"]
+    )  # Mark has the smaller active workload.
+    assert created["partner"] == "Example Partner"
+    assert created["external_id"] == "CP-8909"
+    assert (
+        datetime.fromisoformat(created["sla_breach_at"])
+        - datetime.fromisoformat(created["submitted_at"])
+    ).total_seconds() == 72 * 3600
+    history = seeded_client.get(
+        f"/api/submissions/{created['id']}/history", headers=headers(ids["submitter"])
+    ).json()
+    assert [e["event_type"] for e in history["events"]] == [
+        "SUBMITTED",
+        "AUTO_ASSIGNED",
+    ]
+    assert all(
+        e["version_number"] == 1 and e["actor_id"] == ids["submitter"]
+        for e in history["events"]
+    )
+
+
+def test_visibility_includes_only_own_work_and_metrics(seeded_client):
+    ids = _users(seeded_client)
+    conn = db.connect()
+    conn.execute(
+        "INSERT INTO users VALUES ('other', 'Other Marketer', 'SUBMITTER', 'Marketing', '2026-09-25T00:00:00Z')"
+    )
+    conn.commit()
+    conn.close()
+    foreign = _create(seeded_client, "other", title="Private campaign")
+    for route in (
+        f"/api/submissions/{foreign['id']}",
+        f"/api/submissions/{foreign['id']}/history",
+    ):
+        assert (
+            seeded_client.get(route, headers=headers(ids["submitter"])).status_code
+            == 404
+        )
+    visible = seeded_client.get(
+        "/api/submissions", headers=headers(ids["submitter"])
+    ).json()["submissions"]
+    assert len(visible) == 6 and all(
+        s["submitter_id"] == ids["submitter"] for s in visible
+    )
+    assert (
+        seeded_client.get("/api/metrics", headers=headers("other")).json()["open_count"]
+        == 1
+    )
+    assert (
+        seeded_client.get("/api/metrics", headers=headers(ids["reviewer_a"])).json()[
+            "open_count"
+        ]
+        == 7
+    )
+    assert (
+        act(
+            seeded_client,
+            foreign,
+            ids["submitter"],
+            "resubmit",
+            copy_text="Changed copy",
+        ).status_code
+        == 404
+    )
+
+
+def test_golden_journey_preserves_versions_and_updates_metrics(seeded_client):
+    ids = _users(seeded_client)
+    record = _create(seeded_client, ids["submitter"], copy_text="You are pre-approved.")
+    reviewer = record["assigned_reviewer_id"]
+    blocked = act(seeded_client, record, reviewer, "approve")
+    assert blocked.status_code == 409 and blocked.json()["code"] == "PREFLIGHT_BLOCKED"
+    assert get_record(seeded_client, record["id"], reviewer)["record_version"] == 1
+    response = act(
+        seeded_client,
+        record,
+        reviewer,
+        "request-changes",
+        comment="Remove the claim and add disclosure.",
+    )
+    assert response.status_code == 200
+    changed = response.json()
+    assert changed["status"] == "CHANGES_REQUESTED"
+    response = act(
+        seeded_client,
+        changed,
+        ids["submitter"],
+        "resubmit",
+        copy_text="Explore our rewards. Subject to credit approval.",
+    )
+    assert response.status_code == 200
+    revised = response.json()
+    assert revised["current_version"] == 2
+    assert revised["sla_breach_at"] == record["sla_breach_at"]
+    assert revised["assigned_reviewer_id"] == reviewer
+    assert (
+        act(
+            seeded_client, revised, reviewer, "approve", comment="Reviewed version 2"
+        ).status_code
+        == 200
+    )
+    final = get_record(seeded_client, record["id"], reviewer)
+    assert final["status"] == "APPROVED" and final["allowed_actions"] == []
+    history = seeded_client.get(
+        f"/api/submissions/{record['id']}/history", headers=headers(reviewer)
+    ).json()
+    assert [v["copy_text"] for v in history["versions"]] == [
+        "You are pre-approved.",
+        "Explore our rewards. Subject to credit approval.",
+    ]
+    assert history["events"][-1]["version_number"] == 2
+    metrics = seeded_client.get("/api/metrics", headers=headers(reviewer)).json()
+    assert metrics["open_count"] == 6 and metrics["completed_last_7_days"] == 2
+
+
+def test_reassignment_permissions_and_terminal_guard(seeded_client):
+    ids = _users(seeded_client)
+    record = _create(seeded_client, ids["submitter"])
+    owner = record["assigned_reviewer_id"]
+    other = next(ids[k] for k in ("reviewer_a", "reviewer_b") if ids[k] != owner)
+    assert act(seeded_client, record, other, "approve").status_code == 403
+    assert (
+        act(seeded_client, record, other, "assign", reviewer_id=owner).json()["code"]
+        == "INVALID_TRANSITION"
+    )
+    assert (
+        act(seeded_client, record, other, "assign", reviewer_id=other).json()["code"]
+        == "VALIDATION_ERROR"
+    )
+    response = act(
+        seeded_client,
+        record,
+        other,
+        "assign",
+        reviewer_id=other,
+        comment="Balancing workload",
+    )
+    assert response.status_code == 200
+    record = response.json()
+    assert act(seeded_client, record, owner, "approve").status_code == 403
+    response = act(seeded_client, record, other, "reject", comment="Campaign cancelled")
+    assert response.status_code == 200
+    final = response.json()
+    assert (
+        act(
+            seeded_client, final, other, "assign", reviewer_id=owner, comment="Reopen"
+        ).json()["code"]
+        == "INVALID_TRANSITION"
+    )
+
+
+def test_revision_must_change_content_and_url_can_be_removed(seeded_client):
+    ids = _users(seeded_client)
+    record = _create(
+        seeded_client, ids["submitter"], asset_url="https://example.com/context"
+    )
+    changed = act(
+        seeded_client,
+        record,
+        record["assigned_reviewer_id"],
+        "request-changes",
+        comment="Remove outdated link",
+    ).json()
+    unchanged = act(
+        seeded_client,
+        changed,
+        ids["submitter"],
+        "resubmit",
+        copy_text=changed["copy_text"],
+        asset_url=changed["asset_url"],
+    )
+    assert unchanged.status_code == 409
+    revised = act(
+        seeded_client,
+        changed,
+        ids["submitter"],
+        "resubmit",
+        copy_text=changed["copy_text"],
+        asset_url=None,
+    )
+    assert revised.status_code == 200 and revised.json()["asset_url"] is None
+
+
+def test_stale_write_never_overwrites(seeded_client):
+    ids = _users(seeded_client)
+    record = _create(seeded_client, ids["submitter"])
+    assert (
+        act(
+            seeded_client, record, record["assigned_reviewer_id"], "approve"
+        ).status_code
+        == 200
+    )
+    stale = act(
+        seeded_client,
+        record,
+        record["assigned_reviewer_id"],
+        "reject",
+        comment="Stale decision",
+    )
+    assert stale.status_code == 409 and stale.json()["code"] == "VERSION_CONFLICT"
+
+
+def test_filters_compose_and_completed_is_separate(seeded_client):
+    ids = _users(seeded_client)
+    created = _create(seeded_client, ids["submitter"], title="Needle")
+    response = seeded_client.get(
+        "/api/submissions",
+        params={
+            "status": "UNDER_REVIEW",
+            "search": "needle",
+            "reviewer": created["assigned_reviewer_id"],
+        },
+        headers=headers(ids["reviewer_a"]),
+    )
+    assert [s["id"] for s in response.json()["submissions"]] == [created["id"]]
+    completed = seeded_client.get(
+        "/api/submissions?completed=true", headers=headers(ids["reviewer_a"])
+    ).json()["submissions"]
+    assert len(completed) == 1 and completed[0]["status"] == "APPROVED"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"title": " "},
+        {"copy_text": " "},
+        {"copy_text": "x" * 20001},
+        {"asset_url": "javascript:alert(1)"},
+        {"asset_url": "https://user:password@example.com"},
+        {"channel": "AFFILIATE", "partner": " "},
+        {"partner": "x" * 121},
+        {"target_launch_date": "2020-01-01"},
+        {"actor_id": "spoofed"},
+    ],
+)
+def test_invalid_intake_is_normalized(seeded_client, overrides):
+    ids = _users(seeded_client)
+    body = dict(
+        title="Valid title",
+        copy_text="Copy",
+        product="CREDIT_CARD",
+        channel="SOCIAL",
+        target_launch_date=datetime.now(timezone.utc).date().isoformat(),
+    )
+    body.update(overrides)
+    response = seeded_client.post(
+        "/api/submissions", json=body, headers=headers(ids["submitter"])
+    )
+    assert response.status_code == 422 and response.json()["code"] == "VALIDATION_ERROR"
+    assert response.json()["details"]["fields"]
+
+
+def test_reset_permission_disabled_mode_and_stale_ids(seeded_client, monkeypatch):
+    ids = _users(seeded_client)
+    record = _create(seeded_client, ids["submitter"])
+    assert (
+        seeded_client.post(
+            "/api/demo/reset", headers=headers(ids["submitter"])
+        ).status_code
+        == 403
+    )
+    monkeypatch.setenv("DEMO_MODE", "false")
+    assert (
+        seeded_client.post(
+            "/api/demo/reset", headers=headers(ids["reviewer_a"])
+        ).status_code
+        == 403
+    )
+    monkeypatch.setenv("DEMO_MODE", "true")
+    assert (
+        seeded_client.post(
+            "/api/demo/reset", headers=headers(ids["reviewer_a"])
+        ).status_code
+        == 200
+    )
+    assert (
+        seeded_client.get(
+            "/api/submissions", headers=headers(ids["reviewer_a"])
+        ).status_code
+        == 401
+    )
+    fresh = _users(seeded_client)
+    assert (
+        seeded_client.get(
+            f"/api/submissions/{record['id']}", headers=headers(fresh["reviewer_a"])
+        ).status_code
+        == 404
+    )

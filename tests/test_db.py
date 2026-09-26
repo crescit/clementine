@@ -48,6 +48,7 @@ def _row(temp_db: Path, sql: str, params: tuple = ()) -> sqlite3.Row | None:
 
 # --- Schema / constraints ---------------------------------------------------
 
+
 def test_schema_creates_four_tables_and_indexes(temp_db: Path) -> None:
     _seed(temp_db)
     rows = _query(
@@ -57,12 +58,17 @@ def test_schema_creates_four_tables_and_indexes(temp_db: Path) -> None:
     names = {r["name"] for r in rows}
     assert {"users", "submissions", "submission_versions", "audit_events"} <= names
 
-    indexes = {r["name"] for r in _query(
-        temp_db, "SELECT name FROM sqlite_master WHERE type='index'"
-    )}
+    indexes = {
+        r["name"]
+        for r in _query(temp_db, "SELECT name FROM sqlite_master WHERE type='index'")
+    }
     for want in [
-        "idx_submissions_status", "idx_submissions_reviewer", "idx_submissions_sla",
-        "idx_versions_submission", "idx_audit_submission", "idx_audit_created",
+        "idx_submissions_status",
+        "idx_submissions_reviewer",
+        "idx_submissions_sla",
+        "idx_versions_submission",
+        "idx_audit_submission",
+        "idx_audit_created",
     ]:
         assert want in indexes, f"missing index {want}"
 
@@ -108,7 +114,9 @@ def test_unique_external_id_and_version_pair(temp_db: Path) -> None:
                 "'2026-09-25T00:00:00Z')"
             )
         # Duplicate (submission_id, version_number) rejected.
-        sid = _row(temp_db, "SELECT id FROM submissions WHERE external_id='CP-8904'")["id"]
+        sid = _row(temp_db, "SELECT id FROM submissions WHERE external_id='CP-8904'")[
+            "id"
+        ]
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
                 "INSERT INTO submission_versions (id, submission_id, version_number, "
@@ -121,6 +129,7 @@ def test_unique_external_id_and_version_pair(temp_db: Path) -> None:
 
 
 # --- Baseline counts and §8 metrics ----------------------------------------
+
 
 def test_baseline_counts_and_metrics(temp_db: Path) -> None:
     _seed(temp_db)
@@ -141,20 +150,25 @@ def test_baseline_counts_and_metrics(temp_db: Path) -> None:
 
     # Avg turnaround (30d) and completed (7d) from decided records.
     decided = [
-        s for s in subs
+        s
+        for s in subs
         if s["status"] in {"APPROVED", "REJECTED"} and s["decided_at"] is not None
     ]
     window_30 = [
-        s for s in decided
+        s
+        for s in decided
         if FROZEN - timedelta(days=30) <= _parse_iso(s["decided_at"]) <= FROZEN
     ]
     assert len(window_30) == 1
     only = window_30[0]
-    turnaround = (_parse_iso(only["decided_at"]) - _parse_iso(only["submitted_at"])).total_seconds() / 86400
+    turnaround = (
+        _parse_iso(only["decided_at"]) - _parse_iso(only["submitted_at"])
+    ).total_seconds() / 86400
     assert round(turnaround, 1) == 5.0
 
     window_7 = [
-        s for s in decided
+        s
+        for s in decided
         if FROZEN - timedelta(days=7) <= _parse_iso(s["decided_at"]) <= FROZEN
     ]
     assert len(window_7) == 1
@@ -193,7 +207,13 @@ def test_cp8905_has_v1_v2_history(temp_db: Path) -> None:
         (sub["id"],),
     )
     types = [e["event_type"] for e in events]
-    assert types == ["SUBMITTED", "AUTO_ASSIGNED", "CHANGES_REQUESTED", "RESUBMITTED", "APPROVED"]
+    assert types == [
+        "SUBMITTED",
+        "AUTO_ASSIGNED",
+        "CHANGES_REQUESTED",
+        "RESUBMITTED",
+        "APPROVED",
+    ]
     approved = [e for e in events if e["event_type"] == "APPROVED"][0]
     assert approved["version_number"] == 2
     # v1 copy remains unchanged (immutability): first version row unchanged.
@@ -202,12 +222,15 @@ def test_cp8905_has_v1_v2_history(temp_db: Path) -> None:
 
 # --- Restart persistence, reset, rollback ----------------------------------
 
+
 def test_repeated_boot_preserves_changes(temp_db: Path) -> None:
     _seed(temp_db)
     # Mutate: rename an existing submission.
     conn = db.connect(temp_db)
     try:
-        conn.execute("UPDATE submissions SET title='EDITED TITLE' WHERE external_id='CP-8903'")
+        conn.execute(
+            "UPDATE submissions SET title='EDITED TITLE' WHERE external_id='CP-8903'"
+        )
         conn.commit()
     finally:
         conn.close()
@@ -222,24 +245,22 @@ def test_repeated_boot_preserves_changes(temp_db: Path) -> None:
 
 def test_reset_generates_fresh_uuids(temp_db: Path) -> None:
     _seed(temp_db)
-    before = {
-        r["id"] for r in _query(temp_db, "SELECT id FROM users")
-    } | {
+    before = {r["id"] for r in _query(temp_db, "SELECT id FROM users")} | {
         r["id"] for r in _query(temp_db, "SELECT id FROM submissions")
     }
 
     seed.reset_database(temp_db, FROZEN)
 
-    after = {
-        r["id"] for r in _query(temp_db, "SELECT id FROM users")
-    } | {
+    after = {r["id"] for r in _query(temp_db, "SELECT id FROM users")} | {
         r["id"] for r in _query(temp_db, "SELECT id FROM submissions")
     }
     assert before.isdisjoint(after)
     assert len(_query(temp_db, "SELECT * FROM submissions")) == 7
 
 
-def test_failing_reset_rolls_back(temp_db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_failing_reset_rolls_back(
+    temp_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _seed(temp_db)
     original = _row(temp_db, "SELECT * FROM submissions WHERE external_id='CP-8902'")
     assert original is not None
@@ -247,6 +268,7 @@ def test_failing_reset_rolls_back(temp_db: Path, monkeypatch: pytest.MonkeyPatch
     # Force the reseed to fail mid-write: corrupt the seed builder.
     def boom(*args, **kwargs):
         raise RuntimeError("forced seed failure")
+
     monkeypatch.setattr(seed, "_build_seed", boom)
 
     with pytest.raises(RuntimeError):
@@ -283,9 +305,7 @@ def test_corrupt_db_does_not_silently_reset(tmp_path: Path) -> None:
     path = tmp_path / "corrupt.db"
     conn = db.connect(path)
     try:
-        conn.executescript(
-            "CREATE TABLE unrelated (x INTEGER); PRAGMA user_version=1;"
-        )
+        conn.executescript("CREATE TABLE unrelated (x INTEGER); PRAGMA user_version=1;")
         conn.commit()
     finally:
         conn.close()
@@ -308,3 +328,15 @@ def test_timestamps_are_coherent_utc(temp_db: Path) -> None:
         assert submitted.tzinfo is not None
         # SLA breach is exactly 72h after submission for every record.
         assert breach - submitted == timedelta(hours=72)
+
+
+def test_seed_clean_and_approved_examples_pass_the_policy_scan(temp_db):
+    from clearpath.preflight import run_preflight
+    _seed(temp_db)
+    rows = _query(temp_db, """SELECT s.external_id, s.product, s.channel, v.copy_text
+        FROM submissions s JOIN submission_versions v
+        ON v.submission_id = s.id AND v.version_number = s.current_version
+        WHERE s.external_id IN ('CP-8905', 'CP-8908')""")
+    assert len(rows) == 2
+    for row in rows:
+        assert run_preflight(row['product'], row['channel'], row['copy_text'])['passed'], row['external_id']

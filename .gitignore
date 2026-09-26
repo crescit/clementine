@@ -29,3 +29,10 @@ data/
 
 # Docker
 .docker/
+
+# Generated benchmark logs (raw JSON summaries and manifests are committed)
+docs/benchmarks/**/*.log
+
+# Unused local 3D reference assets, retained locally
+/Unknown.jpeg
+/a4c83a19-3f0d-4462-ab52-00b084bd6f9c.glb

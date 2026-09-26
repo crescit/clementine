@@ -12,17 +12,35 @@ The acceptance criteria are exercised explicitly:
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from clearpath.models import (
-    ApproveRequest, AssignRequest, Channel, ErrorCode, IntakeRequest, Product,
-    RejectRequest, RequestChangesRequest, ResubmitRequest, Role,
+    ApproveRequest,
+    AssignRequest,
+    Channel,
+    ErrorCode,
+    IntakeRequest,
+    Product,
+    RejectRequest,
+    RequestChangesRequest,
+    ResubmitRequest,
+    Role,
     SubmissionStatus,
 )
 from clearpath.workflow import (
-    Action, ForbiddenError, InvalidTransitionError, NotFoundError,
-    SubmissionRecord, UserRecord, ValidationError, check_permission,
-    check_transition, check_visibility, validate_action,
+    Action,
+    ForbiddenError,
+    InvalidTransitionError,
+    NotFoundError,
+    SubmissionRecord,
+    UserRecord,
+    ValidationError,
+    check_permission,
+    check_transition,
+    check_visibility,
+    validate_action,
 )
 
 # --- Fixtures -----------------------------------------------------------------
@@ -151,37 +169,61 @@ def test_transition_matrix(action: Action) -> None:
 
 def test_create_destination_depends_on_reviewer_availability() -> None:
     record = sub(SubmissionStatus.UNDER_REVIEW)
-    assert check_transition(Action.CREATE, record, reviewer_available=True) == SubmissionStatus.UNDER_REVIEW
-    assert check_transition(Action.CREATE, record, reviewer_available=False) == SubmissionStatus.PENDING_ASSIGNMENT
+    assert (
+        check_transition(Action.CREATE, record, reviewer_available=True)
+        == SubmissionStatus.UNDER_REVIEW
+    )
+    assert (
+        check_transition(Action.CREATE, record, reviewer_available=False)
+        == SubmissionStatus.PENDING_ASSIGNMENT
+    )
 
 
 def test_resubmit_destination_depends_on_reviewer_availability() -> None:
     record = sub(SubmissionStatus.CHANGES_REQUESTED)
     args = feedback_for(Action.RESUBMIT)
-    assert check_transition(Action.RESUBMIT, record, reviewer_available=True, **args) == SubmissionStatus.UNDER_REVIEW
-    assert check_transition(Action.RESUBMIT, record, reviewer_available=False, **args) == SubmissionStatus.PENDING_ASSIGNMENT
+    assert (
+        check_transition(Action.RESUBMIT, record, reviewer_available=True, **args)
+        == SubmissionStatus.UNDER_REVIEW
+    )
+    assert (
+        check_transition(Action.RESUBMIT, record, reviewer_available=False, **args)
+        == SubmissionStatus.PENDING_ASSIGNMENT
+    )
 
 
 # --- Permission: every action x every actor ------------------------------------
 
 PERMISSIONS: dict[Action, tuple[UserRecord, ...]] = {
-    Action.CREATE: (OWNER, FOREIGN),                  # any submitter (new record)
-    Action.RESUBMIT: (OWNER,),                     # only the owning submitter
+    Action.CREATE: (OWNER, FOREIGN),  # any submitter (new record)
+    Action.RESUBMIT: (OWNER,),  # only the owning submitter
     Action.ASSIGN: (ASSIGNED_REVIEWER, OTHER_REVIEWER),  # any reviewer
     Action.REQUEST_CHANGES: (ASSIGNED_REVIEWER,),  # assigned reviewer only
-    Action.APPROVE: (ASSIGNED_REVIEWER,),          # assigned reviewer only
-    Action.REJECT: (ASSIGNED_REVIEWER,),           # assigned reviewer only
+    Action.APPROVE: (ASSIGNED_REVIEWER,),  # assigned reviewer only
+    Action.REJECT: (ASSIGNED_REVIEWER,),  # assigned reviewer only
 }
 
 
-@pytest.mark.parametrize("action", [
-    Action.CREATE, Action.ASSIGN, Action.REQUEST_CHANGES,
-    Action.RESUBMIT, Action.APPROVE, Action.REJECT,
-])
-@pytest.mark.parametrize("actor", [
-    UserRecord(R1, Role.REVIEWER), UserRecord(R2, Role.REVIEWER),
-    UserRecord(S1, Role.SUBMITTER), UserRecord(S2, Role.SUBMITTER),
-])
+@pytest.mark.parametrize(
+    "action",
+    [
+        Action.CREATE,
+        Action.ASSIGN,
+        Action.REQUEST_CHANGES,
+        Action.RESUBMIT,
+        Action.APPROVE,
+        Action.REJECT,
+    ],
+)
+@pytest.mark.parametrize(
+    "actor",
+    [
+        UserRecord(R1, Role.REVIEWER),
+        UserRecord(R2, Role.REVIEWER),
+        UserRecord(S1, Role.SUBMITTER),
+        UserRecord(S2, Role.SUBMITTER),
+    ],
+)
 def test_permission_matrix(action: Action, actor: UserRecord) -> None:
     """Only the §5-permitted actors may attempt each action."""
     allowed = PERMISSIONS[action]
@@ -224,9 +266,21 @@ def test_reviewer_sees_all_and_submitter_sees_own() -> None:
 
 # --- Terminal protection -------------------------------------------------------
 
+
 @pytest.mark.parametrize("terminal", TERMINAL)
-@pytest.mark.parametrize("action", [Action.ASSIGN, Action.RESUBMIT, Action.APPROVE, Action.REJECT, Action.REQUEST_CHANGES])
-def test_terminal_records_reject_all_mutations(terminal: SubmissionStatus, action: Action) -> None:
+@pytest.mark.parametrize(
+    "action",
+    [
+        Action.ASSIGN,
+        Action.RESUBMIT,
+        Action.APPROVE,
+        Action.REJECT,
+        Action.REQUEST_CHANGES,
+    ],
+)
+def test_terminal_records_reject_all_mutations(
+    terminal: SubmissionStatus, action: Action
+) -> None:
     record = sub(terminal)
     args = feedback_for(action)
     with pytest.raises(InvalidTransitionError):
@@ -242,6 +296,7 @@ def test_terminal_reassignment_rejected() -> None:
 
 
 # --- Content conditions (§5) ----------------------------------------------------
+
 
 def test_request_changes_requires_nonblank_feedback() -> None:
     record = sub(SubmissionStatus.UNDER_REVIEW)
@@ -267,7 +322,9 @@ def test_reassign_requires_reason_when_replacing_reviewer() -> None:
     with pytest.raises(ValidationError):
         check_transition(Action.ASSIGN, record, target_reviewer_id=R2)
     # With a reason it succeeds.
-    dest = check_transition(Action.ASSIGN, record, target_reviewer_id=R2, feedback="rebalance queue")
+    dest = check_transition(
+        Action.ASSIGN, record, target_reviewer_id=R2, feedback="rebalance queue"
+    )
     assert dest == SubmissionStatus.UNDER_REVIEW
 
 
@@ -282,9 +339,12 @@ def test_resubmit_requires_content_change() -> None:
     record = sub(SubmissionStatus.CHANGES_REQUESTED)
     with pytest.raises(InvalidTransitionError):
         check_transition(
-            Action.RESUBMIT, record,
-            copy_text="same", prior_copy="same",
-            asset_url="https://example.com/a", prior_asset_url="https://example.com/a",
+            Action.RESUBMIT,
+            record,
+            copy_text="same",
+            prior_copy="same",
+            asset_url="https://example.com/a",
+            prior_asset_url="https://example.com/a",
         )
 
 
@@ -296,9 +356,13 @@ def test_resubmit_requires_copy_or_asset_url() -> None:
 
 # --- Combined validate_action ---------------------------------------------------
 
+
 def test_validate_action_approve_success() -> None:
     record = sub(SubmissionStatus.UNDER_REVIEW)
-    assert validate_action(Action.APPROVE, ASSIGNED_REVIEWER, record) == SubmissionStatus.APPROVED
+    assert (
+        validate_action(Action.APPROVE, ASSIGNED_REVIEWER, record)
+        == SubmissionStatus.APPROVED
+    )
 
 
 def test_validate_action_approve_wrong_reviewer() -> None:
@@ -312,21 +376,28 @@ def test_validate_action_resubmit_foreign_submitter() -> None:
     # Visibility is checked first: a foreign submitter cannot see the record.
     with pytest.raises(NotFoundError):
         validate_action(
-            Action.RESUBMIT, FOREIGN, record,
-            copy_text="new", prior_copy="old",
+            Action.RESUBMIT,
+            FOREIGN,
+            record,
+            copy_text="new",
+            prior_copy="old",
         )
 
 
 def test_validate_action_assign_opens_pending() -> None:
     record = sub(SubmissionStatus.PENDING_ASSIGNMENT)
     dest = validate_action(
-        Action.ASSIGN, ASSIGNED_REVIEWER, record,
-        target_reviewer_id=R2, feedback="assign",
+        Action.ASSIGN,
+        ASSIGNED_REVIEWER,
+        record,
+        target_reviewer_id=R2,
+        feedback="assign",
     )
     assert dest == SubmissionStatus.UNDER_REVIEW
 
 
 # --- No extra states / no role shortcuts (immutable vocabulary) ------------------
+
 
 def test_no_extra_enum_states() -> None:
     """The §4 status vocabulary is fixed; no extra states are introduced."""
@@ -342,17 +413,22 @@ def test_no_extra_enum_states() -> None:
 
 def test_audit_event_vocabulary() -> None:
     from clearpath.models import AuditEventType
+
     assert set(AuditEventType) == {
-        AuditEventType.SUBMITTED, AuditEventType.AUTO_ASSIGNED,
-        AuditEventType.ASSIGNED, AuditEventType.REASSIGNED,
-        AuditEventType.CHANGES_REQUESTED, AuditEventType.RESUBMITTED,
-        AuditEventType.APPROVED, AuditEventType.REJECTED,
+        AuditEventType.SUBMITTED,
+        AuditEventType.AUTO_ASSIGNED,
+        AuditEventType.ASSIGNED,
+        AuditEventType.REASSIGNED,
+        AuditEventType.CHANGES_REQUESTED,
+        AuditEventType.RESUBMITTED,
+        AuditEventType.APPROVED,
+        AuditEventType.REJECTED,
     }
 
 
 # --- Request validation (§9) ------------------------------------------------------
 
-LAUNCH_FUTURE = "2026-10-01"
+LAUNCH_FUTURE = (datetime.now(timezone.utc) + timedelta(days=7)).date().isoformat()
 LAUNCH_PAST = "2020-01-01"
 
 
@@ -400,11 +476,14 @@ def test_affiliate_partner_length() -> None:
         intake(channel=Channel.AFFILIATE, partner="p" * 121)
 
 
-@pytest.mark.parametrize("url", [
-    "ftp://example.com/x",                # disallowed scheme
-    "https://user:pw@example.com/x",      # credentials
-    "not a url",                          # no scheme
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "ftp://example.com/x",  # disallowed scheme
+        "https://user:pw@example.com/x",  # credentials
+        "not a url",  # no scheme
+    ],
+)
 def test_intake_rejects_bad_asset_url(url: str) -> None:
     with pytest.raises(Exception):
         intake(asset_url=url)
@@ -427,10 +506,16 @@ def test_intake_rejects_bad_launch_date() -> None:
 
 def test_intake_forbids_unknown_fields() -> None:
     with pytest.raises(Exception):
-        IntakeRequest(**{
-            "title": "x", "channel": Channel.EMAIL, "product": Product.CREDIT_CARD,
-            "target_launch_date": LAUNCH_FUTURE, "copy_text": "abc", "extra": 1,
-        })
+        IntakeRequest(
+            **{
+                "title": "x",
+                "channel": Channel.EMAIL,
+                "product": Product.CREDIT_CARD,
+                "target_launch_date": LAUNCH_FUTURE,
+                "copy_text": "abc",
+                "extra": 1,
+            }
+        )
 
 
 def test_reject_requires_nonblank_comment() -> None:
@@ -455,8 +540,14 @@ def test_assign_comment_optional() -> None:
 
 def test_resubmit_url_validation() -> None:
     with pytest.raises(Exception):
-        ResubmitRequest(expected_record_version=1, copy_text="new", asset_url="https://user:pw@example.com")
-    ok = ResubmitRequest(expected_record_version=1, copy_text="new", asset_url="https://example.com/a")
+        ResubmitRequest(
+            expected_record_version=1,
+            copy_text="new",
+            asset_url="https://user:pw@example.com",
+        )
+    ok = ResubmitRequest(
+        expected_record_version=1, copy_text="new", asset_url="https://example.com/a"
+    )
     assert ok.asset_url == "https://example.com/a"
 
 
@@ -466,6 +557,7 @@ def test_expected_record_version_ge_1() -> None:
 
 
 # --- Error code vocabulary --------------------------------------------------------
+
 
 def test_error_codes_canonical() -> None:
     """Domain errors carry the §9 canonical codes."""

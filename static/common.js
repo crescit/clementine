@@ -1,53 +1,123 @@
-/**
- * ClearPath shared browser helpers.
- *
- * Shared by the three HTML pages: fetch wrapper with the demo identity header,
- * persona header rendering, and safe text/DOM helpers. No framework, no bundler.
- * Real queue, detail, and intake behavior lands in later cards (K7-K11); these
- * helpers are the common seam every page uses.
- */
-
-"use strict";
-
-export const API_HEADER = "X-Demo-User-Id";
-
-/** Same-origin fetch wrapper that always sends the demo persona header. */
-export async function api(path, { method = "GET", body = null } = {}) {
-  const userId = localStorage.getItem("clearpath_user_id") || "";
-  const headers = { "X-Demo-User-Id": userId };
-  let payload;
-  if (body !== null) {
-    headers["Content-Type"] = "application/json";
-    payload = JSON.stringify(body);
+export const $ = (id) => document.getElementById(id);
+export const label = (value) => ({
+  PENDING_ASSIGNMENT: 'Pending assignment',
+  UNDER_REVIEW: 'Under review',
+  CHANGES_REQUESTED: 'Changes requested',
+  MORTGAGE_PREQUALIFICATION: 'Mortgage prequalification'
+} [value] || String(value || '').toLowerCase().replaceAll('_', ' ').replace(/^./, c => c.toUpperCase()));
+export function el(tag, text, cls) {
+  const node = document.createElement(tag);
+  if (text != null) node.textContent = text;
+  if (cls) node.className = cls;
+  return node;
+}
+export function option(value, text) {
+  const n = el('option', text);
+  n.value = value;
+  return n;
+}
+export function badge(status) {
+  return el('span', label(status), `badge ${status.toLowerCase()}`);
+}
+export const date = (value, time = false) => value ? new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+  ...(time ? {
+    hour: 'numeric',
+    minute: '2-digit'
+  } : {})
+}).format(new Date(value)) + (time ? ' UTC' : '') : '—';
+export async function api(path, {
+  method = 'GET',
+  body
+} = {}) {
+  let response;
+  try {
+    response = await fetch(path, {
+      method,
+      headers: {
+        'X-Demo-User-Id': localStorage.getItem('clearpath_user_id') || '',
+        ...(body ? {
+          'Content-Type': 'application/json'
+        } : {})
+      },
+      ...(body ? {
+        body: JSON.stringify(body)
+      } : {})
+    });
+  } catch {
+    throw new Error('Unable to connect. Check your connection and try again. Your entered text is still here.');
   }
-  const res = await fetch(path, { method, headers, body: payload });
-  return res;
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error('The server could not complete this request. Please try again.');
+  }
+  if (!response.ok) {
+    const error = new Error(data.message || 'Unable to complete this request.');
+    error.code = data.code;
+    error.fields = data.details?.fields;
+    throw error;
+  }
+  return data;
 }
-
-/** Render submitted copy/user text via textContent — never innerHTML. */
-export function setText(el, value) {
-  if (!el) return;
-  el.textContent = String(value == null ? "" : value);
+export function notice(message, error = false) {
+  const box = $('notice');
+  box.hidden = false;
+  box.className = `notice ${error?'error':'success'}`;
+  box.replaceChildren(el('span', message));
+  box.setAttribute('role', error ? 'alert' : 'status');
 }
-
-export function readParam(name) {
-  return new URLSearchParams(window.location.search).get(name);
+export function showError(error) {
+  notice(error.message + (error.fields ? ' ' + error.fields.map(f => `${label(f.field)}: ${f.message}`).join(' · ') : ''), true);
+  if (['VERSION_CONFLICT', 'UNAUTHENTICATED', 'NOT_FOUND'].includes(error.code)) {
+    const b = el('button', 'Reload latest');
+    b.onclick = () => location.reload();
+    $('notice').append(b);
+  }
+  $('notice').scrollIntoView({
+    block: 'nearest',
+    behavior: 'smooth'
+  });
 }
-
-/**
- * Render the persona header actions. Real switcher behavior lands in K7; this
- * only renders the shell so each page has the same header seam.
- */
-export function renderPersonaHeader(container) {
-  if (!container) return;
-  container.innerHTML = "";
-  const status = document.createElement("span");
-  status.className = "persona-slot";
-  status.textContent = "Persona: loading…";
-  container.appendChild(status);
+export async function init() {
+  const {
+    users
+  } = await api('/api/users');
+  const actor = users.find(u => u.id === localStorage.getItem('clearpath_user_id')) || users.find(u => u.name.startsWith('Sarah')) || users[0];
+  if (!actor) throw new Error('No workspace users are configured. Enable demo seeding on a fresh database to use this demo.');
+  localStorage.setItem('clearpath_user_id', actor.id);
+  const select = el('select');
+  select.id = 'persona';
+  select.setAttribute('aria-label', 'Demo persona');
+  users.forEach(u => select.append(option(u.id, `${u.name} · ${u.display_title || label(u.role)}`)));
+  select.value = actor.id;
+  select.onchange = () => {
+    localStorage.setItem('clearpath_user_id', select.value);
+    location.reload();
+  };
+  const avatar = el('span', actor.name.split(' ').map(n => n[0]).join(''), 'avatar');
+  $('header-actions').replaceChildren(el('span', 'Viewing as', 'small'), avatar, select);
+  return {
+    users,
+    actor
+  };
 }
-
-/** Escape a string for a text node (safe default). */
-export function text(value) {
-  return String(value == null ? "" : value);
+export const person = (users, id) => users.find(u => u.id === id)?.name || 'Unassigned';
+export async function busy(form, task) {
+  const controls = [...form.querySelectorAll('button')];
+  const states = controls.map(b => b.disabled);
+  controls.forEach(b => b.disabled = true);
+  form.setAttribute('aria-busy', 'true');
+  try {
+    await task();
+  } catch (e) {
+    showError(e);
+  } finally {
+    controls.forEach((b, i) => b.disabled = states[i]);
+    form.removeAttribute('aria-busy');
+  }
 }

@@ -1,0 +1,20 @@
+{
+  "database": "docs/benchmarks/baseline-2026-09-25/scale-1000.db",
+  "seed": 42,
+  "as_of": "2026-09-26T06:12:11Z",
+  "counts": {
+    "users": 240,
+    "submissions": 1000,
+    "submission_versions": 1220,
+    "audit_events": 2883,
+    "statuses": {
+      "APPROVED": 349,
+      "CHANGES_REQUESTED": 151,
+      "PENDING_ASSIGNMENT": 102,
+      "REJECTED": 45,
+      "UNDER_REVIEW": 353
+    }
+  },
+  "database_bytes": 3330048,
+  "synthetic": true
+}
