@@ -131,56 +131,108 @@ def compute_metrics(
     actor_id: str | None = None,
     scope: str = "all_submissions",
 ) -> dict:
-    """Return the §7 metrics envelope for the current persona's visible set."""
+    """Return the §7 metrics envelope for the current persona's visible set.
+
+    Aggregates in SQL so large corpora are not materialized and sorted in Python.
+    """
+    clauses: list[str] = []
+    params: list = []
     if scope == "own_submissions" and actor_id is not None:
-        mine = True
-    else:
-        mine = False
+        clauses.append("submitter_id = ?")
+        params.append(actor_id)
+    elif actor_id is not None:
+        clauses.append("(assigned_reviewer_id = ? OR assigned_reviewer_id IS NULL)")
+        params.append(actor_id)
+    scope_sql = (" AND " + " AND ".join(clauses)) if clauses else ""
 
-    open_items = queue(conn, now, actor_id=actor_id, mine=mine, completed=False)
-    terminal_items = queue(conn, now, actor_id=actor_id, mine=mine, completed=True)
+    # Stored timestamps are UTC. Pad fractional seconds to six places so
+    # equivalent instants (including .000000) compare equally at boundaries.
+    def ts(column: str) -> str:
+        normalized = f"REPLACE(REPLACE({column}, 'Z', ''), '+00:00', '')"
+        return (
+            f"(SUBSTR({column}, 1, 19) || '.' || "
+            f"SUBSTR(SUBSTR({normalized}, 21) || '000000', 1, 6))"
+        )
 
-    open_count = len(open_items)
-    sla_breached_count = sum(
-        1 for it in open_items if urgency_bucket(now, it["sla_breach_at"]) == BREACHED
-    )
-    unassigned_count = sum(1 for it in open_items if it["assigned_reviewer_id"] is None)
+    now_s = _bind_ts(now)
+    cutoff_7 = _bind_ts(now - timedelta(days=7))
+    cutoff_30 = _bind_ts(now - timedelta(days=30))
+    open_ph = ",".join("?" for _ in OPEN_STATUSES)
+    terminal_ph = ",".join("?" for _ in TERMINAL_STATUSES)
 
-    # Turnaround: approved/rejected records have decided_at set; measure elapsed
-    # from submitted_at to decided_at in elapsed days.
-    sample: list[float] = []
-    for it in terminal_items:
-        if it["decided_at"] is None:
-            continue
-        submitted = datetime.fromisoformat(it["submitted_at"]).astimezone(timezone.utc)
-        decided = datetime.fromisoformat(it["decided_at"]).astimezone(timezone.utc)
-        days = (decided - submitted).total_seconds() / 86400.0
-        if now - timedelta(days=30) <= decided <= now and days >= 0:
-            sample.append(days)
-
-    completed_last_7_days = 0
-    cutoff = now - timedelta(days=7)
-    for it in terminal_items:
-        if it["decided_at"] is None:
-            continue
-        decided = datetime.fromisoformat(it["decided_at"]).astimezone(timezone.utc)
-        if cutoff <= decided <= now:
-            completed_last_7_days += 1
-
+    sql = f"""
+        SELECT
+          COALESCE(SUM(CASE WHEN status IN ({open_ph}) THEN 1 ELSE 0 END), 0)
+            AS open_count,
+          COALESCE(SUM(CASE WHEN status IN ({open_ph})
+            AND {ts("sla_breach_at")} <= ? THEN 1 ELSE 0 END), 0)
+            AS sla_breached_count,
+          COALESCE(SUM(CASE WHEN status IN ({open_ph})
+            AND assigned_reviewer_id IS NULL THEN 1 ELSE 0 END), 0)
+            AS unassigned_count,
+          COALESCE(SUM(CASE WHEN status IN ({terminal_ph})
+            AND decided_at IS NOT NULL
+            AND {ts("decided_at")} >= ?
+            AND {ts("decided_at")} <= ?
+            THEN 1 ELSE 0 END), 0)
+            AS completed_last_7_days,
+          AVG(CASE WHEN status IN ({terminal_ph})
+            AND decided_at IS NOT NULL
+            AND {ts("decided_at")} >= ?
+            AND {ts("decided_at")} <= ?
+            AND {ts("decided_at")} >= {ts("submitted_at")}
+            THEN (julianday({ts("decided_at")}) - julianday({ts("submitted_at")}))
+            ELSE NULL END)
+            AS avg_turnaround_days,
+          COALESCE(SUM(CASE WHEN status IN ({terminal_ph})
+            AND decided_at IS NOT NULL
+            AND {ts("decided_at")} >= ?
+            AND {ts("decided_at")} <= ?
+            AND {ts("decided_at")} >= {ts("submitted_at")}
+            THEN 1 ELSE 0 END), 0)
+            AS turnaround_sample_size
+        FROM submissions
+        WHERE 1=1{scope_sql}
+    """
+    bind = [
+        *OPEN_STATUSES,
+        *OPEN_STATUSES,
+        now_s,
+        *OPEN_STATUSES,
+        *TERMINAL_STATUSES,
+        cutoff_7,
+        now_s,
+        *TERMINAL_STATUSES,
+        cutoff_30,
+        now_s,
+        *TERMINAL_STATUSES,
+        cutoff_30,
+        now_s,
+        *params,
+    ]
+    row = conn.execute(sql, bind).fetchone()
+    sample_size = int(row["turnaround_sample_size"])
+    avg_raw = row["avg_turnaround_days"]
     avg_turnaround_days: float | None = None
-    if sample:
-        avg_turnaround_days = round(sum(sample) / len(sample), 1)
+    if sample_size > 0 and avg_raw is not None:
+        avg_turnaround_days = round(float(avg_raw), 1)
 
     return {
-        "open_count": open_count,
-        "sla_breached_count": sla_breached_count,
-        "unassigned_count": unassigned_count,
+        "open_count": int(row["open_count"]),
+        "sla_breached_count": int(row["sla_breached_count"]),
+        "unassigned_count": int(row["unassigned_count"]),
         "avg_turnaround_days": avg_turnaround_days,
-        "turnaround_sample_size": len(sample),
-        "completed_last_7_days": completed_last_7_days,
+        "turnaround_sample_size": sample_size,
+        "completed_last_7_days": int(row["completed_last_7_days"]),
         "scope": scope,
         "as_of": _iso(now),
     }
+
+
+def _bind_ts(dt: datetime) -> str:
+    """UTC timestamp with fixed microsecond precision for SQL comparisons."""
+    utc = dt.astimezone(timezone.utc)
+    return utc.strftime("%Y-%m-%dT%H:%M:%S.%f")
 
 
 def _iso(dt: datetime) -> str:

@@ -47,8 +47,8 @@ uv run python -m scripts.performance.generate --database /tmp/clearpath-showcase
 DATABASE_PATH=/tmp/clearpath-showcase.db DEMO_MODE=false uv run uvicorn clearpath.api:app --port 8020
 ```
 
-Open http://localhost:8020. This is a separate synthetic workspace. `DEMO_MODE=false` prevents accidental reset to the seven-record baseline; it does not add authentication. The existing UI still fetches the complete open queue, so a large backlog can load slowly. This limitation is what the benchmark measures.
+Open http://localhost:8020. This is a separate synthetic workspace. `DEMO_MODE=false` prevents accidental reset to the seven-record baseline; it does not add authentication. The queue UI requests a 50-row page by default; use Next/Previous to browse larger backlogs.
 
 For exact fixture reproduction, pass `--seed 42 --as-of <timestamp-from-manifest>` to the generator. Existing files are never overwritten. To rerun, choose a new database/output path.
 
-Read `docs/PERFORMANCE.md` for results and prioritized implementation recommendations.
+Read `docs/PERFORMANCE.md` for results and prioritized implementation recommendations. The runner requests `limit=50` explicitly, records returned row/total metadata, and includes focused queue/metrics phases (concurrency 1 and 10, ≥200 concurrent requests).

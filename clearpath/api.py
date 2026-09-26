@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
@@ -129,12 +129,15 @@ def _submission_row(conn: sqlite3.Connection, submission_id: str) -> sqlite3.Row
     ).fetchone()
 
 
-def _projection(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
-    version_row = conn.execute(
-        "SELECT asset_url, copy_text FROM submission_versions "
-        "WHERE submission_id = ? AND version_number = ?",
-        (row["id"], row["current_version"]),
-    ).fetchone()
+_SUMMARY_COLUMNS = (
+    "id, external_id, title, partner, channel, product, status, "
+    "assigned_reviewer_id, submitter_id, target_launch_date, submitted_at, "
+    "sla_breach_at, decided_at, current_version, record_version"
+)
+
+
+def _summary_projection(row: sqlite3.Row) -> dict:
+    """Queue-list fields only — no content fetch or version join."""
     return {
         "id": row["id"],
         "external_id": row["external_id"],
@@ -146,14 +149,24 @@ def _projection(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
         "assigned_reviewer_id": row["assigned_reviewer_id"],
         "submitter_id": row["submitter_id"],
         "target_launch_date": row["target_launch_date"],
-        "asset_url": version_row["asset_url"] if version_row else None,
-        "copy_text": version_row["copy_text"] if version_row else None,
         "submitted_at": row["submitted_at"],
         "sla_breach_at": row["sla_breach_at"],
         "decided_at": row["decided_at"],
         "current_version": row["current_version"],
         "record_version": row["record_version"],
     }
+
+
+def _projection(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    version_row = conn.execute(
+        "SELECT asset_url, copy_text FROM submission_versions "
+        "WHERE submission_id = ? AND version_number = ?",
+        (row["id"], row["current_version"]),
+    ).fetchone()
+    detail = _summary_projection(row)
+    detail["asset_url"] = version_row["asset_url"] if version_row else None
+    detail["copy_text"] = version_row["copy_text"] if version_row else None
+    return detail
 
 
 def _allowed_actions(actor_row, row) -> list[str]:
@@ -298,6 +311,8 @@ def create_app() -> FastAPI:
         search: str | None = None,
         completed: bool | None = None,
         risk: bool = False,
+        limit: int = Query(50, ge=1, le=100),
+        offset: int = Query(0, ge=0),
         x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
     ):
         conn = db.connect()
@@ -344,23 +359,39 @@ def create_app() -> FastAPI:
                     "status IN ('PENDING_ASSIGNMENT', 'UNDER_REVIEW', 'CHANGES_REQUESTED')"
                 )
 
-            sql = (
-                "SELECT * FROM submissions "
-                + ("WHERE " + " AND ".join(where) if where else "")
-                + (
-                    " ORDER BY decided_at DESC, external_id"
-                    if completed
-                    else " ORDER BY sla_breach_at, target_launch_date, submitted_at, external_id"
-                )
+            where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+            order_sql = (
+                "ORDER BY decided_at DESC, external_id"
+                if completed
+                else "ORDER BY sla_breach_at, target_launch_date, submitted_at, external_id"
             )
-            rows = conn.execute(sql, params).fetchall()
+            # Short read transaction keeps count and page consistent for this response.
+            conn.execute("BEGIN")
+            try:
+                total = conn.execute(
+                    f"SELECT COUNT(*) FROM submissions {where_sql}", params
+                ).fetchone()[0]
+                rows = conn.execute(
+                    f"SELECT {_SUMMARY_COLUMNS} FROM submissions {where_sql} "
+                    f"{order_sql} LIMIT ? OFFSET ?",
+                    [*params, limit, offset],
+                ).fetchall()
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
             items = []
             for r in rows:
-                item = _projection(conn, r)
+                item = _summary_projection(r)
                 item["urgency"] = metrics_mod.urgency_bucket(now, r["sla_breach_at"])
                 item["allowed_actions"] = _allowed_actions(actor_row, r)
                 items.append(item)
-            return {"submissions": items}
+            return {
+                "submissions": items,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
         finally:
             conn.close()
 

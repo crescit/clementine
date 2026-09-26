@@ -75,17 +75,36 @@ async def request(client, path, actor, *, method="GET", body=None, expected=(200
         ), None
 
 
-async def closed_phase(client, name, paths, actor, concurrency, count):
+async def closed_phase(client, name, paths, actor, concurrency, count, *, parse_queue=False):
     samples = []
     counter = iter(range(count))
 
     async def worker():
         for i in counter:
-            sample, _ = await request(client, paths[i % len(paths)], actor)
+            sample, response = await request(client, paths[i % len(paths)], actor)
+            if parse_queue and response is not None and sample["ok"]:
+                try:
+                    payload = response.json()
+                    sample["returned_rows"] = len(payload.get("submissions", []))
+                    sample["total"] = payload.get("total")
+                    sample["limit"] = payload.get("limit")
+                    sample["offset"] = payload.get("offset")
+                except ValueError:
+                    pass
             samples.append(sample)
 
     started = time.perf_counter()
     await asyncio.gather(*(worker() for _ in range(concurrency)))
+    extra = {}
+    if parse_queue:
+        row_counts = [s["returned_rows"] for s in samples if "returned_rows" in s]
+        totals = [s["total"] for s in samples if s.get("total") is not None]
+        extra = dict(
+            returned_rows_p50=percentile(row_counts, 0.5) if row_counts else None,
+            returned_rows_max=max(row_counts) if row_counts else None,
+            reported_total=totals[0] if totals else None,
+            page_limit=next((s.get("limit") for s in samples if "limit" in s), None),
+        )
     return summary(
         name,
         samples,
@@ -93,6 +112,7 @@ async def closed_phase(client, name, paths, actor, concurrency, count):
         concurrency=concurrency,
         mode="closed_loop",
         endpoints=paths,
+        **extra,
     )
 
 
@@ -309,7 +329,23 @@ def verify_writes(database, created, contested):
 def query_plans(database):
     conn = sqlite3.connect(database)
     statements = {
-        "queue": "SELECT * FROM submissions WHERE status IN ('PENDING_ASSIGNMENT','UNDER_REVIEW','CHANGES_REQUESTED') ORDER BY sla_breach_at,target_launch_date,submitted_at,external_id",
+        "queue_page": (
+            "SELECT id, external_id, title, partner, channel, product, status, "
+            "assigned_reviewer_id, submitter_id, target_launch_date, submitted_at, "
+            "sla_breach_at, decided_at, current_version, record_version "
+            "FROM submissions WHERE status IN "
+            "('PENDING_ASSIGNMENT','UNDER_REVIEW','CHANGES_REQUESTED') "
+            "ORDER BY sla_breach_at,target_launch_date,submitted_at,external_id "
+            "LIMIT 50 OFFSET 0"
+        ),
+        "queue_count": (
+            "SELECT COUNT(*) FROM submissions WHERE status IN "
+            "('PENDING_ASSIGNMENT','UNDER_REVIEW','CHANGES_REQUESTED')"
+        ),
+        "metrics_aggregate": (
+            "SELECT COUNT(*) FROM submissions WHERE status IN "
+            "('PENDING_ASSIGNMENT','UNDER_REVIEW','CHANGES_REQUESTED')"
+        ),
         "next_external_id": "SELECT MAX(CAST(SUBSTR(external_id,4) AS INTEGER)) FROM submissions",
         "reviewer_load": "SELECT u.id, COUNT(s.id) AS load FROM users u LEFT JOIN submissions s ON s.assigned_reviewer_id=u.id AND s.status='UNDER_REVIEW' WHERE u.role='REVIEWER' GROUP BY u.id ORDER BY load,u.name,u.id LIMIT 1",
     }
@@ -347,24 +383,39 @@ async def measure(base, database, records):
         for path in ["/api/health", detail, "/api/metrics"]:
             await request(client, path, reviewer)  # unmeasured warmup
         large = records >= 100000
+        queue_path = "/api/submissions?limit=50&offset=0"
+        # Focused post-pagination profiles: explicit page size, matched concurrency,
+        # and enough samples for a meaningful p95.
         await add(
             await closed_phase(
                 client,
-                "queue_sequential",
-                ["/api/submissions"],
+                "queue_page_sequential",
+                [queue_path],
                 reviewer,
                 1,
-                3 if large else 8,
+                50,
+                parse_queue=True,
             )
         )
         await add(
             await closed_phase(
                 client,
-                "queue_concurrent",
-                ["/api/submissions"],
+                "queue_page_concurrent",
+                [queue_path],
                 reviewer,
-                2 if large else 10,
-                4 if large else 40,
+                10,
+                200,
+                parse_queue=True,
+            )
+        )
+        await add(
+            await closed_phase(
+                client,
+                "metrics_sequential",
+                ["/api/metrics"],
+                reviewer,
+                1,
+                50,
             )
         )
         await add(
@@ -373,8 +424,39 @@ async def measure(base, database, records):
                 "metrics_concurrent",
                 ["/api/metrics"],
                 reviewer,
-                5 if large else 10,
-                15 if large else 60,
+                10,
+                200,
+            )
+        )
+        # Deep/middle page samples (offset cost); not compared 1:1 with first page.
+        conn = sqlite3.connect(database)
+        open_total = conn.execute(
+            "SELECT COUNT(*) FROM submissions WHERE status IN "
+            "('PENDING_ASSIGNMENT','UNDER_REVIEW','CHANGES_REQUESTED')"
+        ).fetchone()[0]
+        conn.close()
+        mid_offset = max(0, (open_total // 2) // 50 * 50)
+        last_offset = max(0, ((open_total - 1) // 50) * 50)
+        await add(
+            await closed_phase(
+                client,
+                "queue_page_middle",
+                [f"/api/submissions?limit=50&offset={mid_offset}"],
+                reviewer,
+                5,
+                40,
+                parse_queue=True,
+            )
+        )
+        await add(
+            await closed_phase(
+                client,
+                "queue_page_last",
+                [f"/api/submissions?limit=50&offset={last_offset}"],
+                reviewer,
+                5,
+                40,
+                parse_queue=True,
             )
         )
         await add(
@@ -391,17 +473,18 @@ async def measure(base, database, records):
             await closed_phase(
                 client,
                 "search_concurrent",
-                ["/api/submissions?search=Campaign%200009"],
+                ["/api/submissions?search=Campaign%200009&limit=50"],
                 reviewer,
                 5,
                 20,
+                parse_queue=True,
             )
         )
         paths = [
             detail,
             detail + "/history",
             detail,
-            "/api/submissions",
+            queue_path,
             "/api/metrics",
         ]
         await add(
@@ -410,8 +493,8 @@ async def measure(base, database, records):
                 "mixed_concurrent",
                 paths,
                 reviewer,
-                3 if large else 10,
-                15 if large else 100,
+                10,
+                100,
             )
         )
         if records == 10000:
@@ -424,11 +507,24 @@ async def measure(base, database, records):
         metrics = (
             await client.get("/api/metrics", headers={"X-Demo-User-Id": reviewer})
         ).json()
+        queue_probe = (
+            await client.get(queue_path, headers={"X-Demo-User-Id": reviewer})
+        ).json()
     return {
         "phases": phases,
         "integrity": verify_writes(database, created, contested),
         "query_plans": query_plans(database),
         "post_load_metrics": metrics,
+        "queue_page_probe": {
+            "path": queue_path,
+            "returned_rows": len(queue_probe.get("submissions", [])),
+            "total": queue_probe.get("total"),
+            "limit": queue_probe.get("limit"),
+            "offset": queue_probe.get("offset"),
+            "decoded_bytes": len(
+                json.dumps(queue_probe).encode()
+            ),  # approximate; exact wire size is in phase samples
+        },
     }
 
 

@@ -525,6 +525,29 @@ tbody tr:hover {
   height: 32px
 }
 
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--line);
+  background: #fcfcfd
+}
+
+.pager-summary {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  flex: 1
+}
+
+.pager .button.is-disabled,
+.pager a[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none
+}
+
 .table-footer {
   padding: 13px 24px;
   background: #fcfcfd;

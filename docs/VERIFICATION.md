@@ -88,3 +88,14 @@ uv run --with playwright python scripts/browser_check.py http://127.0.0.1:8017
 The follow-up performance investigation added isolated corpus generation, real HTTP load profiles, SQL tracing, and Chrome network emulation. The complete suite now passes **137 tests** (135 application tests plus 2 benchmark-tool checks). Application hashes match the baseline throughout the investigation; no performance optimizations were applied.
 
 See [Performance baseline and implementation handoff](PERFORMANCE.md) for 1k/10k/100k results, network measurements, limitations, and the prioritized work for the next implementation pass. All 100 tested review lifecycles preserved their expected versions/events; three contested-approval tests each produced exactly one committed approval. The large-queue and metrics latency findings are documented as shortcomings, not scalability successes.
+
+
+## Final handoff — 2026-09-26 UTC
+
+- Deliverables: [live demo](https://clearpath-compliance.onrender.com) and [public GitHub repository](https://github.com/crescit/clementine).
+- Full suite: **152 passed**, one upstream test-client deprecation warning.
+- Local Chrome acceptance on disposable port 8021: lifecycle, permissions, intake, filters, safe text, stale-tab recovery, mobile overflow, pagination, detail return, and offset recovery all passed. Updated screenshots retained.
+- Public pre-push smoke: root, health, queue JavaScript, intake/detail pages, users and authenticated demo queue all returned 200. Public repository visibility confirmed. That deployed version preceded pagination; deployment verification follows publication.
+- Final synthetic performance evidence and remaining limits: [PERFORMANCE.md](PERFORMANCE.md). Real team productivity is a pilot hypothesis, not a benchmark claim.
+- Take-home scope is complete: all three products, affiliate intake, routing, prioritized review, revision loops, human decisions, audit history and operational metrics. Excel/email describe the replaced process; import/export and real notifications are documented future work.
+- Production identity, persistent hosting storage, legal policy coverage, and sustained capacity remain explicitly outside this demo's guarantees.

@@ -1,0 +1,358 @@
+{
+  "phases": [
+    {
+      "name": "queue_page_sequential",
+      "requests": 50,
+      "successes": 50,
+      "errors": 0,
+      "status_counts": {
+        "200": 50
+      },
+      "duration_seconds": 1.5,
+      "successful_rps": 33.33,
+      "latency_ms": {
+        "p50": 30.08,
+        "p95": 32.87,
+        "p99": 56.24,
+        "max": 56.24
+      },
+      "decoded_response_bytes": 1375250,
+      "response_bytes_p50": 27505,
+      "concurrency": 1,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions?limit=50&offset=0"
+      ],
+      "returned_rows_p50": 50,
+      "returned_rows_max": 50,
+      "reported_total": 60006,
+      "page_limit": 50
+    },
+    {
+      "name": "queue_page_concurrent",
+      "requests": 200,
+      "successes": 200,
+      "errors": 0,
+      "status_counts": {
+        "200": 200
+      },
+      "duration_seconds": 1.739,
+      "successful_rps": 115.03,
+      "latency_ms": {
+        "p50": 82.54,
+        "p95": 121.62,
+        "p99": 131.21,
+        "max": 135.49
+      },
+      "decoded_response_bytes": 5501000,
+      "response_bytes_p50": 27505,
+      "concurrency": 10,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions?limit=50&offset=0"
+      ],
+      "returned_rows_p50": 50,
+      "returned_rows_max": 50,
+      "reported_total": 60006,
+      "page_limit": 50
+    },
+    {
+      "name": "metrics_sequential",
+      "requests": 50,
+      "successes": 50,
+      "errors": 0,
+      "status_counts": {
+        "200": 50
+      },
+      "duration_seconds": 7.365,
+      "successful_rps": 6.79,
+      "latency_ms": {
+        "p50": 146.6,
+        "p95": 152.57,
+        "p99": 158.68,
+        "max": 158.68
+      },
+      "decoded_response_bytes": 10750,
+      "response_bytes_p50": 215,
+      "concurrency": 1,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/metrics"
+      ]
+    },
+    {
+      "name": "metrics_concurrent",
+      "requests": 200,
+      "successes": 200,
+      "errors": 0,
+      "status_counts": {
+        "200": 200
+      },
+      "duration_seconds": 72.472,
+      "successful_rps": 2.76,
+      "latency_ms": {
+        "p50": 3650.47,
+        "p95": 3743.98,
+        "p99": 3777.18,
+        "max": 3805.49
+      },
+      "decoded_response_bytes": 43000,
+      "response_bytes_p50": 215,
+      "concurrency": 10,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/metrics"
+      ]
+    },
+    {
+      "name": "queue_page_middle",
+      "requests": 40,
+      "successes": 40,
+      "errors": 0,
+      "status_counts": {
+        "200": 40
+      },
+      "duration_seconds": 6.129,
+      "successful_rps": 6.53,
+      "latency_ms": {
+        "p50": 757.67,
+        "p95": 885.74,
+        "p99": 899.34,
+        "max": 899.34
+      },
+      "decoded_response_bytes": 1100120,
+      "response_bytes_p50": 27503,
+      "concurrency": 5,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions?limit=50&offset=30000"
+      ],
+      "returned_rows_p50": 50,
+      "returned_rows_max": 50,
+      "reported_total": 60006,
+      "page_limit": 50
+    },
+    {
+      "name": "queue_page_last",
+      "requests": 40,
+      "successes": 40,
+      "errors": 0,
+      "status_counts": {
+        "200": 40
+      },
+      "duration_seconds": 7.0,
+      "successful_rps": 5.71,
+      "latency_ms": {
+        "p50": 861.16,
+        "p95": 948.73,
+        "p99": 956.51,
+        "max": 956.51
+      },
+      "decoded_response_bytes": 132480,
+      "response_bytes_p50": 3312,
+      "concurrency": 5,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions?limit=50&offset=60000"
+      ],
+      "returned_rows_p50": 6,
+      "returned_rows_max": 6,
+      "reported_total": 60006,
+      "page_limit": 50
+    },
+    {
+      "name": "detail_concurrent",
+      "requests": 200,
+      "successes": 200,
+      "errors": 0,
+      "status_counts": {
+        "200": 200
+      },
+      "duration_seconds": 0.477,
+      "successful_rps": 419.33,
+      "latency_ms": {
+        "p50": 28.79,
+        "p95": 135.56,
+        "p99": 229.21,
+        "max": 239.76
+      },
+      "decoded_response_bytes": 247800,
+      "response_bytes_p50": 1127,
+      "concurrency": 20,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions/6b65a6a4-8b81-48f6-b38a-088ca65ed389",
+        "/api/submissions/6b65a6a4-8b81-48f6-b38a-088ca65ed389/history"
+      ]
+    },
+    {
+      "name": "search_concurrent",
+      "requests": 20,
+      "successes": 20,
+      "errors": 0,
+      "status_counts": {
+        "200": 20
+      },
+      "duration_seconds": 0.38,
+      "successful_rps": 52.68,
+      "latency_ms": {
+        "p50": 92.82,
+        "p95": 97.49,
+        "p99": 97.6,
+        "max": 97.6
+      },
+      "decoded_response_bytes": 545820,
+      "response_bytes_p50": 27291,
+      "concurrency": 5,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions?search=Campaign%200009&limit=50"
+      ],
+      "returned_rows_p50": 50,
+      "returned_rows_max": 50,
+      "reported_total": 60,
+      "page_limit": 50
+    },
+    {
+      "name": "mixed_concurrent",
+      "requests": 100,
+      "successes": 100,
+      "errors": 0,
+      "status_counts": {
+        "200": 100
+      },
+      "duration_seconds": 7.763,
+      "successful_rps": 12.88,
+      "latency_ms": {
+        "p50": 16.6,
+        "p95": 3759.11,
+        "p99": 3817.88,
+        "max": 3822.56
+      },
+      "decoded_response_bytes": 626500,
+      "response_bytes_p50": 1127,
+      "concurrency": 10,
+      "mode": "closed_loop",
+      "endpoints": [
+        "/api/submissions/6b65a6a4-8b81-48f6-b38a-088ca65ed389",
+        "/api/submissions/6b65a6a4-8b81-48f6-b38a-088ca65ed389/history",
+        "/api/submissions/6b65a6a4-8b81-48f6-b38a-088ca65ed389",
+        "/api/submissions?limit=50&offset=0",
+        "/api/metrics"
+      ]
+    },
+    {
+      "name": "write_lifecycle",
+      "requests": 20,
+      "successes": 20,
+      "errors": 0,
+      "status_counts": {
+        "complete": 20
+      },
+      "duration_seconds": 4.438,
+      "successful_rps": 4.51,
+      "latency_ms": {
+        "p50": 1899.67,
+        "p95": 3781.67,
+        "p99": 3853.84,
+        "max": 3853.84
+      },
+      "decoded_response_bytes": 51020,
+      "response_bytes_p50": 2551,
+      "concurrency": 10,
+      "unit": "four-step lifecycle",
+      "planned_writes": 80,
+      "failures": []
+    },
+    {
+      "name": "contested_decision",
+      "requests": 20,
+      "successes": 20,
+      "errors": 0,
+      "status_counts": {
+        "200": 1,
+        "409": 19
+      },
+      "duration_seconds": 0.046,
+      "successful_rps": 438.27,
+      "latency_ms": {
+        "p50": 31.4,
+        "p95": 37.87,
+        "p99": 41.7,
+        "max": 41.7
+      },
+      "decoded_response_bytes": 3683,
+      "response_bytes_p50": 161,
+      "concurrency": 20,
+      "correct": true
+    }
+  ],
+  "integrity": {
+    "completed_lifecycles_verified": 20,
+    "failures": [],
+    "contested_approval_events": 1,
+    "foreign_key_errors": 0,
+    "integrity": "ok"
+  },
+  "query_plans": {
+    "queue_page": [
+      "SEARCH submissions USING INDEX idx_submissions_status (status=?)",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "queue_count": [
+      "SEARCH submissions USING COVERING INDEX idx_submissions_status (status=?)"
+    ],
+    "metrics_aggregate": [
+      "SEARCH submissions USING COVERING INDEX idx_submissions_status (status=?)"
+    ],
+    "next_external_id": [
+      "SEARCH submissions USING COVERING INDEX sqlite_autoindex_submissions_2"
+    ],
+    "reviewer_load": [
+      "SCAN u USING INDEX sqlite_autoindex_users_1",
+      "SEARCH s USING INDEX idx_submissions_reviewer (assigned_reviewer_id=?) LEFT-JOIN",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ]
+  },
+  "post_load_metrics": {
+    "open_count": 60006,
+    "sla_breached_count": 58070,
+    "unassigned_count": 10002,
+    "avg_turnaround_days": 2.5,
+    "turnaround_sample_size": 14562,
+    "completed_last_7_days": 4320,
+    "scope": "all_submissions",
+    "as_of": "2026-09-26T06:41:43Z"
+  },
+  "queue_page_probe": {
+    "path": "/api/submissions?limit=50&offset=0",
+    "returned_rows": 50,
+    "total": 60006,
+    "limit": 50,
+    "offset": 0,
+    "decoded_bytes": 29217
+  },
+  "server_peak_sampled_rss_mib": null,
+  "memory_sampling": "server RSS sampled once per second; short peaks may be missed",
+  "fixture": {
+    "database": "/Users/josh/Documents/Projects/promptarmortakehome/docs/benchmarks/p0-2026-09-26-100k/scale-100000.db",
+    "seed": 42,
+    "as_of": "2026-09-26T06:37:55Z",
+    "counts": {
+      "users": 240,
+      "submissions": 100000,
+      "submission_versions": 122000,
+      "audit_events": 288993,
+      "statuses": {
+        "APPROVED": 34999,
+        "CHANGES_REQUESTED": 15001,
+        "PENDING_ASSIGNMENT": 10002,
+        "REJECTED": 4995,
+        "UNDER_REVIEW": 35003
+      }
+    },
+    "database_bytes": 325607424,
+    "synthetic": true
+  },
+  "server_pid": 39776
+}

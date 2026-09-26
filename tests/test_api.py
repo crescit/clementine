@@ -7,13 +7,12 @@ mutations, metrics, history, error envelope mapping (401/403/404/409/503).
 
 from __future__ import annotations
 
-from collections.abc import Generator
 from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
 
-from clearpath import db, seed
+from clearpath import db
 
 # --- K0 smoke ------------------------------------------------------------------
 
@@ -60,16 +59,6 @@ def test_static_assets_available(client: TestClient) -> None:
 
 
 # --- K5-K6 helpers --------------------------------------------------------------
-
-
-@pytest.fixture
-def seeded_client(
-    client: TestClient, temp_db, frozen_now, monkeypatch
-) -> Generator[TestClient, None, None]:
-    """Seed the temp DB with the 3 demo personas + backlog before API calls."""
-    seed.reset_database(db.get_database_path(), frozen_now)
-    monkeypatch.setattr("clearpath.api._now", lambda: frozen_now)
-    yield client
 
 
 def _users(seeded_client: TestClient) -> dict[str, str]:
