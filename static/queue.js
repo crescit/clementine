@@ -10,6 +10,25 @@ import {
   person,
   showError
 } from './common.js';
+
+const FILTER_KEYS = ['completed', 'status', 'reviewer', 'search', 'risk', 'limit', 'offset'];
+
+function queueHref(params, overrides = {}) {
+  const next = new URLSearchParams();
+  for (const key of FILTER_KEYS) {
+    const value = key in overrides ? overrides[key] : params.get(key);
+    if (value != null && value !== '') next.set(key, String(value));
+  }
+  const query = next.toString();
+  return query ? `/static/index.html?${query}` : '/static/index.html';
+}
+
+function parseNonNegInt(value, fallback) {
+  if (value == null || value === '') return fallback;
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
 async function load() {
   const {
     users,
@@ -36,12 +55,24 @@ async function load() {
     $('reviewer').disabled = true;
     params.delete('reviewer');
   }
+  // Filter / tab / clear links omit offset; applying filters via the form also omits it.
+  const limit = Math.min(100, Math.max(1, parseNonNegInt(params.get('limit'), 50) || 50));
+  const offset = parseNonNegInt(params.get('offset'), 0);
   const query = new URLSearchParams();
   for (const key of ['completed', 'status', 'reviewer', 'search', 'risk'])
     if (params.get(key)) query.set(key, params.get(key));
+  query.set('limit', String(limit));
+  query.set('offset', String(offset));
   const [{
-    submissions
+    submissions,
+    total,
+    limit: pageLimit,
+    offset: pageOffset
   }, metrics, config] = await Promise.all([api(`/api/submissions?${query}`), api('/api/metrics'), api('/api/config')]);
+  if (total > 0 && pageOffset >= total) {
+    location.replace(queueHref(params, { offset: 0, limit: pageLimit }));
+    return;
+  }
   $('scope').textContent = `${actor.role === 'SUBMITTER' ? 'Your submissions' : 'All team submissions'} · ${completed ? 'most recent decisions first.' : 'sorted by review deadline.'}`;
   const cards = [
     ['Open reviews', metrics.open_count, 'Across active submissions', ''],
@@ -55,9 +86,15 @@ async function load() {
     return card;
   }));
   $('metrics').setAttribute('aria-busy', 'false');
-  $('count').textContent = `${submissions.length} campaign${submissions.length===1?'':'s'} · ${metrics.unassigned_count} unassigned overall`;
+  const start = total === 0 ? 0 : pageOffset + 1;
+  const end = pageOffset + submissions.length;
+  const rangeLabel = total === 0
+    ? `0 campaigns · ${metrics.unassigned_count} unassigned overall`
+    : `${start}–${end} of ${total} campaign${total===1?'':'s'} · ${metrics.unassigned_count} unassigned overall`;
+  $('count').textContent = rangeLabel;
   $('as-of').textContent = `Updated ${date(metrics.as_of,true)}`;
   $('time-heading').textContent = completed ? 'Decision date' : 'Review target';
+  $('queue-body').replaceChildren();
   for (const s of submissions) {
     const row = el('tr');
     const campaign = el('td');
@@ -84,6 +121,24 @@ async function load() {
   }
   $('queue-state').hidden = !!submissions.length;
   $('queue-state').textContent = 'No campaigns match this view. Clear your filters or start a new submission.';
+
+  const pager = $('pager');
+  const prevOffset = Math.max(0, pageOffset - pageLimit);
+  const nextOffset = pageOffset + pageLimit;
+  const hasPrev = pageOffset > 0;
+  const hasNext = nextOffset < total;
+  const prev = el('a', 'Previous', hasPrev ? 'button quiet' : 'button quiet is-disabled');
+  prev.href = hasPrev ? queueHref(params, { offset: prevOffset, limit: pageLimit }) : '#';
+  prev.setAttribute('aria-disabled', hasPrev ? 'false' : 'true');
+  if (!hasPrev) prev.tabIndex = -1;
+  const next = el('a', 'Next', hasNext ? 'button quiet' : 'button quiet is-disabled');
+  next.href = hasNext ? queueHref(params, { offset: nextOffset, limit: pageLimit }) : '#';
+  next.setAttribute('aria-disabled', hasNext ? 'false' : 'true');
+  if (!hasNext) next.tabIndex = -1;
+  const summary = el('span', total === 0 ? 'No matching campaigns' : `Showing ${start}–${end} of ${total}`, 'pager-summary');
+  pager.replaceChildren(prev, summary, next);
+  pager.hidden = false;
+
   $('reset').hidden = !(config.demo_mode && actor.role === 'REVIEWER');
   $('reset').onclick = () => $('reset-dialog').showModal();
   $('reset-dialog').addEventListener('close', async () => {

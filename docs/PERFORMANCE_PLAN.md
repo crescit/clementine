@@ -1,6 +1,6 @@
 # Performance improvement plan
 
-**Status: feasibility review and implementation handoff only. No application optimizations have been applied.** Checked against the current API, queue UI, metrics implementation, schema initialization, tests, and [measured baseline](PERFORMANCE.md).
+**Status: P0 implemented (bounded queue summaries + pagination, SQL metrics). Conditional P1 indexes and later write/network work remain.** Checked against the current API, queue UI, metrics implementation, schema initialization, tests, and [measured baseline](PERFORMANCE.md) / [P0 re-measure](benchmarks/p0-2026-09-26/).
 
 ## Recommendation and time budget
 
@@ -10,11 +10,11 @@ The original plan was a useful backlog but too large for that window: half a day
 
 | Priority | Change | Expected benefit and confidence | Budget |
 |---|---|---|---|
-| P0 | Summary-only queue, 50-row default, API + UI pagination together | Highest: bounds response size, content queries, Python objects, and DOM rows. Bottleneck directly measured. | 75–105 min |
-| P0 | SQL metrics with unchanged semantics | High: removes full-corpus Python materialization/sorting. Bottleneck directly measured. | 35–50 min |
-| Required | Focused harness updates, regression checks, before/after evidence | Makes the improvement reviewable; protects visibility and workflow integrity. | 45–60 min |
-| Setup | Confirm clean baseline, contract and fixture availability | Avoids redoing the completed baseline. | 10–15 min |
-| Conditional P1 | One measured index improvement | May help remaining sorting/scans; query-plan dependent. Includes migration/tests. | Separate 30–60 min |
+| P0 ✓ | Summary-only queue, 50-row default, API + UI pagination together | **Done.** First-page queue at 100k: 50 rows, ~27 KiB, 3 SELECTs, concurrent p95 122 ms. | shipped |
+| P0 ✓ | SQL metrics with unchanged semantics | **Done.** Much faster than Python materialization; concurrent p95 at 100k still 3.7 s (scan/normalize cost). | shipped |
+| Required ✓ | Focused harness updates, regression checks, before/after evidence | **Done.** Suite green; artifacts in `docs/benchmarks/p0-2026-09-26/`. Browser re-measure not run. | shipped |
+| Setup ✓ | Confirm clean baseline, contract and fixture availability | Baseline preserved under `baseline-2026-09-25/`. | shipped |
+| Conditional P1 | One measured index improvement | Next: metrics/deep-page plans after P0 queries. | Separate 30–60 min |
 | Later | Writer profiling, sequence redesign, caching, full capacity study | Useful only after the dominant read work is removed or measured separately. | Separate session |
 
 Core estimate: **165–230 minutes**. Reserve validation time instead of filling the window with optional features. If new compatibility or timestamp issues exceed the budget, reduce scope rather than weaken tests.
@@ -84,7 +84,7 @@ Test exact and just-outside 7/30-day boundaries, future decisions, zero and nega
 
 ## Verification within the short window
 
-The current runner hardcodes workload sizes/concurrency; it does **not** already provide a targeted 200-request, concurrency-10 pagination profile. Include the small harness change in the estimate, rather than presenting nonexistent command flags as available.
+The implemented runner now requests `limit=50` explicitly and includes 200-request, concurrency-10 queue/metrics profiles. Workload sizes remain hardcoded; the steps below describe the verification contract used for this pass.
 
 1. Preserve the committed baseline directory. Record application revision/source hashes, environment, corpus manifest, and exact workload configuration in a new output directory. Use isolated fixtures, never the normal demo database.
 2. Extend the runner to request `limit=50` explicitly, record returned row count/total/bytes, and support focused queue/metrics phases at concurrency 1 and 10, with at least 200 requests per concurrent phase. Update diagnostics to inspect the actual revised SQL, not just their existing hardcoded unbounded query.
@@ -140,5 +140,7 @@ Do not introduce multiple SQLite writer processes, migrate to Postgres, or cache
 Use two coherent implementation changes: **queue API + UI + tests**, and **SQL metrics + tests**; SQL metrics can go first if an early, independently verifiable result is valuable. Follow with the focused benchmark/documentation update. Avoid separate API/UI releases that leave pagination inaccessible.
 
 The core pass is complete when both P0 changes work, mandatory correctness checks pass, reproducible measurements are saved, and target misses/unrun checks are clearly documented. The final report should say what improved, what was measured, and what still limits scale. Synthetic dashboard totals demonstrate a large fixture; they do not prove real compliance-team productivity or production capacity.
+
+**P0 handoff (2026-09-26):** both P0 changes and harness/tests are shipped. See [PERFORMANCE.md](PERFORMANCE.md) for before/after numbers. Remaining: metrics index/cache pass, deep-page cursors if needed, sustained mixed-load validation, writer work. Browser/network re-measurement is recorded in the final verification section of PERFORMANCE.md.
 
 References: [baseline and raw evidence](PERFORMANCE.md), [benchmark tooling](../scripts/performance/README.md), [metric boundary tests](../tests/test_metrics.py), [schema initialization](../clearpath/db.py).

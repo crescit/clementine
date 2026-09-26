@@ -1,0 +1,29 @@
+{
+  "started_at": "2026-09-26T06:46:05.808644+00:00",
+  "python": "3.12.13 (main, Jun 23 2026, 15:44:24) [Clang 22.1.3 ]",
+  "platform": "macOS-15.6-arm64-arm-64bit",
+  "cpu_count": 10,
+  "httpx": "0.28.1",
+  "source_hashes": {
+    "clearpath/__init__.py": "662d2a79d09a0d08b4c955146a0eb4ce34bb3d22f9bfa01f8d2e65a41fcabc06",
+    "clearpath/api.py": "c3ec636c5429ec48aa6ca7ae9c12b6cf4f5cce8ca018f1d03cb2a976b10bdc32",
+    "clearpath/db.py": "02c3780ca469dd8a18fb49a45fd6a6495db9ad55ad54fdb5a957db98cbc6a0d9",
+    "clearpath/metrics.py": "53027eb20fe14cf226963d49083416b816805f7f3e3f0053d774f0dd09968446",
+    "clearpath/models.py": "cc08cadaf1683138442d9e5e1480816483e659af32d958e89b0c42afac7b6d82",
+    "clearpath/preflight.py": "bfc41cb680842703669c367fcdd900ec1c4cd07c9a3608f71ce0944d94b42e31",
+    "clearpath/seed.py": "e1ea97ad8951c91799ca75c3a8fdb791483598e741b07d32e39280da83acd74a",
+    "clearpath/workflow.py": "762af28cc9c80be8dcb22e40179194649659f438bcee358a9ca3021985097835",
+    "static/common.js": "6f93cda48225ae31fd0d1a9ea8d0afca928d6f3ab05db24a51b4d0f9df5aef57",
+    "static/favicon.svg": "348d233ae6f97022c46ad5065f5ddf713e83124cbba3ec9f96c530edb1826988",
+    "static/index.html": "eb4dc6a64f2aa7527faffc2e039a2dc405a240b95a845f66c2803a8ce0837ce4",
+    "static/queue.js": "198ce9d130708af541969a7561677f1b1c2df919a4d3e95a3813f963d0bfd1b5",
+    "static/styles.css": "807f0ca7c599c3159a46804eb4d6dd7d656b202ffe25651e284b51a10fa0319a",
+    "static/submission.html": "67dbb67e81b6483d757f665515539ea806bde7c11564badc8e94680b1019e6e9",
+    "static/submission.js": "a75862de442403bdb6249a2ba1c357f43dabe553972bc3fa447a544ba2d969db",
+    "static/submit.html": "176e4b8121aefb26f06f703bd1f5eca137c791d64165211be97ad508bddf3a19",
+    "static/submit.js": "ef3e535815123e8f97ae4359702f69336da55034019d7a200539f5510cb54994"
+  },
+  "transport": "HTTP/1.1 loopback TCP, persistent connections, no TLS",
+  "server": "one Uvicorn worker, no reload, no access log",
+  "limits": "same host runs server and generator; warm steady-state; not a cloud/free-tier benchmark"
+}

@@ -2,6 +2,8 @@
 
 A working marketing review workspace for fictional ClearPath Financial. It replaces spreadsheet status tracking and disconnected email feedback with structured intake, assigned reviews, versioned copy, and a decision trail.
 
+**[Live demo](https://clearpath-compliance.onrender.com) · [GitHub repository](https://github.com/crescit/clementine)**
+
 **Demo workspace · fictional data · shared state.** The persona selector is intentional demo impersonation, not authentication. Policies and campaigns are synthetic.
 
 ![ClearPath review queue](docs/screenshots/queue-desktop.png)
@@ -70,4 +72,4 @@ FastAPI + SQLite + plain HTML/CSS/browser-native JavaScript. No npm, frontend co
 
 ## Scale testing and performance handoff
 
-The existing app has been benchmarked with **1k, 10k, and 100k synthetic submissions**, concurrent HTTP traffic, workflow writes, and browser network emulation. The tests expose significant large-queue and metrics bottlenecks; optimization recommendations are documented, **not implemented**. See [Performance baseline and prioritized handoff](docs/PERFORMANCE.md) and [reproducible test commands](scripts/performance/README.md).
+The existing app has been benchmarked with **1k, 10k, and 100k synthetic submissions**, concurrent HTTP traffic, workflow writes, and browser network emulation. Queue pagination and SQL metric aggregation are implemented, with before/after evidence. Metrics at 100k and deep pages remain documented limits; these are local synthetic tests, not production-capacity guarantees. See [Performance results and remaining limits](docs/PERFORMANCE.md) and [reproducible test commands](scripts/performance/README.md).

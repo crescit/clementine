@@ -97,7 +97,14 @@ export async function init() {
   select.value = actor.id;
   select.onchange = () => {
     localStorage.setItem('clearpath_user_id', select.value);
-    location.reload();
+    // Persona changes reset pagination so an out-of-range page is not sticky.
+    const url = new URL(location.href);
+    if (url.searchParams.has('offset')) {
+      url.searchParams.delete('offset');
+      location.assign(url.pathname + url.search + url.hash);
+    } else {
+      location.reload();
+    }
   };
   const avatar = el('span', actor.name.split(' ').map(n => n[0]).join(''), 'avatar');
   $('header-actions').replaceChildren(el('span', 'Viewing as', 'small'), avatar, select);

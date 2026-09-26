@@ -31,20 +31,24 @@ def diagnose(database):
             users = client.get("/api/users").json()["users"]
             actor = next(u["id"] for u in users if u["name"] == "Sarah T.")
             for route in [
-                "/api/submissions",
+                "/api/submissions?limit=50&offset=0",
                 "/api/metrics",
-                "/api/submissions?search=Campaign%200009",
+                "/api/submissions?search=Campaign%200009&limit=50",
             ]:
                 statements.clear()
                 response = client.get(route, headers={"X-Demo-User-Id": actor})
                 selections = [
                     s for s in statements if s.lstrip().upper().startswith("SELECT")
                 ]
+                payload = response.json()
                 results[route] = {
                     "http_status": response.status_code,
                     "select_statements": len(selections),
                     "response_bytes": len(response.content),
-                    "returned_queue_rows": len(response.json().get("submissions", [])),
+                    "returned_queue_rows": len(payload.get("submissions", [])),
+                    "reported_total": payload.get("total"),
+                    "limit": payload.get("limit"),
+                    "offset": payload.get("offset"),
                     "sql_examples": list(
                         dict.fromkeys(s.split("WHERE")[0].strip() for s in selections)
                     ),
