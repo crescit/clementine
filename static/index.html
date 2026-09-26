@@ -1,42 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ClearPath · Compliance Review Queue</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Review Queue · ClearPath</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="app-header">
-    <div class="brand">
-      <span class="brand-name">ClearPath</span>
-      <span class="brand-sep" aria-hidden="true">/</span>
-      <span class="brand-product">Compliance</span>
-    </div>
-    <p class="demo-banner" role="status">
-      Demo workspace · fictional data · shared state
-    </p>
-    <div class="header-actions" id="header-actions">
-      <!-- Persona switcher lands in K7 -->
-    </div>
-  </header>
-  <main id="main" class="app-main">
-    <section class="shell-placeholder" aria-labelledby="queue-title">
-      <h1 id="queue-title">Review Queue</h1>
-      <p class="lede">
-        ClearPath Compliance Review is booting. The queue prioritizes work
-        approaching or past the 72-hour review target. Queue rows, metrics,
-        filters, and the completed view arrive in later cards.
-      </p>
-      <p class="meta" id="boot-status">Checking API…</p>
-      <p class="nav-links">
-        <a href="/static/submit.html">New submission</a>
-        ·
-        <a href="/static/submission.html?id=cp-8904">Review workspace (sample id)</a>
-      </p>
-    </section>
-  </main>
-  <script type="module" src="/static/queue.js"></script>
+<body><a class="skip-link" href="#main">Skip to content</a>
+<header class="app-header"><a class="brand" href="/"><span class="brand-icon" aria-hidden="true">C<span>↗</span></span>ClearPath<span class="brand-product">Compliance</span></a>
+<div id="header-actions" class="header-actions">
+</div>
+</header>
+<div class="workspace-bar"><span><span class="live-dot"></span>Demo workspace · fictional data · shared state</span><span>Marketing review workspace</span>
+</div>
+<main id="main" class="app-main">
+<div class="page-heading">
+<div><p class="eyebrow">WORKSPACE / OVERVIEW</p><h1>Review Queue<span class="heading-dot">.</span></h1><p class="lede">Clear ownership. Faster feedback. Every decision in one place.</p>
+</div>
+<div class="actions"><button id="reset" class="quiet" hidden>Reset demo</button><a class="button primary" href="/static/submit.html">＋ New submission</a>
+</div>
+</div>
+<div id="notice" class="notice" role="status" hidden>
+</div>
+<section class="metrics" id="metrics" aria-label="Workspace metrics" aria-busy="true"><p class="muted">Loading workspace metrics…</p>
+</section>
+<section class="panel queue-panel">
+<div class="panel-heading">
+<div><h2>Your review workspace</h2><p id="scope" class="muted">Prioritized against the 72-hour review target.</p>
+</div><span class="small" id="count" aria-live="polite"></span>
+</div>
+<nav class="tabs" aria-label="Queue view"><a id="active-tab" href="/static/index.html">Active queue</a><a id="completed-tab" href="/static/index.html?completed=true">Completed</a>
+</nav>
+<form id="filters" class="filters" action="/static/index.html"><input type="hidden" name="completed" id="completed" value="false"><label class="search">Search campaigns<input type="search" name="search" id="search" placeholder="Search campaign, partner, or ID…" maxlength="120"></label><label>Status<select id="status" name="status"></select></label><label id="reviewer-label">Reviewer<select name="reviewer" id="reviewer"></select></label><label id="risk-label">Priority<select name="risk" id="risk"><option value="">All deadlines</option><option value="true">At risk · ≤24h</option></select></label><button type="submit" class="button">Apply filters</button><a class="quiet" id="clear-filters" href="/static/index.html">Clear</a>
+</form>
+<div class="table-scroll">
+<table>
+<thead>
+<tr><th>Campaign</th><th>Status</th><th>Reviewer</th><th>Launch date</th><th id="time-heading">Review target</th><th><span class="sr-only">Open</span></th>
+</tr>
+</thead>
+<tbody id="queue-body">
+</tbody>
+</table>
+</div>
+<div id="queue-state" class="empty" role="status">Loading your queue…</div>
+<div class="table-footer"><span>72-hour elapsed-time target · Dates in UTC</span><span id="as-of"></span>
+</div>
+</section>
+<aside class="workspace-note"><span class="note-icon" aria-hidden="true">↗</span>
+<div><strong>A complete trail, from intake to decision.</strong><p>Open a campaign to review copy, check demo policies, and keep feedback connected to the right version.</p>
+</div>
+</aside>
+<dialog id="reset-dialog">
+<form method="dialog"><h2>Reset the demo workspace?</h2><p>This removes all shared demo changes and restores seven sample campaigns. Everyone using this demo will see the reset.</p>
+<div class="actions"><button value="cancel">Cancel</button><button value="reset" class="danger">Reset workspace</button>
+</div>
+</form>
+</dialog>
+</main>
+<footer class="app-footer"><span>ClearPath Financial · Internal marketing review</span><span>Fictional demo policies · Human review required</span>
+</footer>
+<script type="module" src="/static/queue.js">
+</script>
 </body>
 </html>

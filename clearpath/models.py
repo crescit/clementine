@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 # --- Enumerations (domain vocabulary from §4) ---------------------------------
 
+
 class Role(StrEnum):
     SUBMITTER = "SUBMITTER"
     REVIEWER = "REVIEWER"
@@ -60,8 +61,10 @@ class Severity(StrEnum):
 
 # --- Canonical domain error codes (§9) ---------------------------------------
 
+
 class ErrorCode:
     """Canonical machine-readable error codes from the API contract."""
+
     VALIDATION_ERROR = "VALIDATION_ERROR"
     UNAUTHENTICATED = "UNAUTHENTICATED"
     FORBIDDEN = "FORBIDDEN"
@@ -95,13 +98,15 @@ def _trim(value: str | None) -> str | None:
 
 # --- Request models (§9) -----------------------------------------------------
 
+
 class IntakeRequest(BaseModel):
     """Create a new submission (owned by the submitter). Server supplies
     status, versions, deadlines, ids, and timestamps."""
+
     model_config = ConfigDict(extra="forbid")
 
     title: str
-    partner: str | None = None
+    partner: str | None = Field(default=None, max_length=PARTNER_MAX)
     channel: Channel
     product: Product
     target_launch_date: str
@@ -113,9 +118,7 @@ class IntakeRequest(BaseModel):
     def validate_title(cls, value: str) -> str:
         value = value.strip()
         if not (TITLE_MIN <= len(value) <= TITLE_MAX):
-            raise ValueError(
-                f"title must be {TITLE_MIN}-{TITLE_MAX} characters"
-            )
+            raise ValueError(f"title must be {TITLE_MIN}-{TITLE_MAX} characters")
         return value
 
     @field_validator("partner")
@@ -128,9 +131,7 @@ class IntakeRequest(BaseModel):
     def validate_copy(cls, value: str) -> str:
         value = value.strip()
         if not (COPY_MIN <= len(value) <= COPY_MAX):
-            raise ValueError(
-                f"copy_text must be {COPY_MIN}-{COPY_MAX} characters"
-            )
+            raise ValueError(f"copy_text must be {COPY_MIN}-{COPY_MAX} characters")
         return value
 
     @field_validator("asset_url")
@@ -175,14 +176,16 @@ class IntakeRequest(BaseModel):
 
 class ExpectedRecordVersion(BaseModel):
     """Common field for mutations that require optimistic concurrency."""
+
     model_config = ConfigDict(extra="forbid")
     expected_record_version: int = Field(ge=1)
 
 
 class AssignRequest(ExpectedRecordVersion):
     """Assign/reassign a reviewer. Any reviewer may perform this action."""
+
     reviewer_id: str
-    comment: str | None = None
+    comment: str | None = Field(default=None, max_length=COMMENT_MAX)
 
     @field_validator("comment")
     @classmethod
@@ -192,6 +195,7 @@ class AssignRequest(ExpectedRecordVersion):
 
 class RequestChangesRequest(ExpectedRecordVersion):
     """Assigned reviewer asks the owning submitter for revisions."""
+
     comment: str
 
     @field_validator("comment")
@@ -199,14 +203,13 @@ class RequestChangesRequest(ExpectedRecordVersion):
     def validate_comment(cls, value: str) -> str:
         value = value.strip()
         if not (COMMENT_MIN <= len(value) <= COMMENT_MAX):
-            raise ValueError(
-                f"comment must be {COMMENT_MIN}-{COMMENT_MAX} characters"
-            )
+            raise ValueError(f"comment must be {COMMENT_MIN}-{COMMENT_MAX} characters")
         return value
 
 
 class ResubmitRequest(ExpectedRecordVersion):
     """Owning submitter revises copy after CHANGES_REQUESTED."""
+
     copy_text: str
     asset_url: str | None = None
 
@@ -215,9 +218,7 @@ class ResubmitRequest(ExpectedRecordVersion):
     def validate_copy(cls, value: str) -> str:
         value = value.strip()
         if not (COPY_MIN <= len(value) <= COPY_MAX):
-            raise ValueError(
-                f"copy_text must be {COPY_MIN}-{COPY_MAX} characters"
-            )
+            raise ValueError(f"copy_text must be {COPY_MIN}-{COPY_MAX} characters")
         return value
 
     @field_validator("asset_url")
@@ -238,7 +239,8 @@ class ResubmitRequest(ExpectedRecordVersion):
 
 class ApproveRequest(ExpectedRecordVersion):
     """Assigned reviewer approves after zero blocking findings."""
-    comment: str | None = None
+
+    comment: str | None = Field(default=None, max_length=COMMENT_MAX)
 
     @field_validator("comment")
     @classmethod
@@ -248,6 +250,7 @@ class ApproveRequest(ExpectedRecordVersion):
 
 class RejectRequest(ExpectedRecordVersion):
     """Assigned reviewer rejects with a nonblank reason."""
+
     comment: str
 
     @field_validator("comment")
@@ -255,7 +258,5 @@ class RejectRequest(ExpectedRecordVersion):
     def validate_comment(cls, value: str) -> str:
         value = value.strip()
         if not (COMMENT_MIN <= len(value) <= COMMENT_MAX):
-            raise ValueError(
-                f"comment must be {COMMENT_MIN}-{COMMENT_MAX} characters"
-            )
+            raise ValueError(f"comment must be {COMMENT_MIN}-{COMMENT_MAX} characters")
         return value

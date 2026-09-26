@@ -1,42 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ClearPath · Submission Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Review workspace · ClearPath</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="app-header">
-    <div class="brand">
-      <span class="brand-name">ClearPath</span>
-      <span class="brand-sep" aria-hidden="true">/</span>
-      <span class="brand-product">Compliance</span>
-    </div>
-    <p class="demo-banner" role="status">
-      Demo workspace · fictional data · shared state
-    </p>
-    <div class="header-actions" id="header-actions">
-      <!-- Persona switcher lands in K7 -->
-    </div>
-  </header>
-  <main id="main" class="app-main">
-    <section class="shell-placeholder" aria-labelledby="detail-title">
-      <h1 id="detail-title">Submission Workspace</h1>
-      <p class="lede">
-        Review detail, version history, and inline revision arrive in later
-        cards. This page loads a record by id from the URL.
-      </p>
-      <p class="meta">Submission id: <span id="submission-id"></span></p>
-      <p class="meta" id="detail-status">Loading detail…</p>
-      <p class="nav-links">
-        <a href="/static/index.html">Back to queue</a>
-        ·
-        <a href="/static/submit.html">New submission</a>
-      </p>
-    </section>
-  </main>
-  <script type="module" src="/static/submission.js"></script>
+<body><a class="skip-link" href="#main">Skip to content</a>
+<header class="app-header"><a class="brand" href="/"><span class="brand-icon" aria-hidden="true">C<span>↗</span></span>ClearPath<span class="brand-product">Compliance</span></a>
+<div id="header-actions" class="header-actions">
+</div>
+</header>
+<div class="workspace-bar"><span><span class="live-dot"></span>Demo workspace · fictional data · shared state</span><span>Marketing review workspace</span>
+</div>
+<main id="main" class="app-main"><a id="back" class="back-link" href="/">← Back to queue</a>
+<div id="notice" class="notice" role="status" hidden>
+</div>
+<div id="loading" class="empty">Loading review workspace…</div>
+<div id="detail" hidden>
+<div class="page-heading">
+<div><p class="eyebrow" id="record-id"></p><h1 id="title"></h1><p class="lede" id="subtitle"></p>
+</div>
+<div id="record-status">
+</div>
+</div>
+<section class="record-meta" id="record-meta" aria-label="Campaign details">
+</section>
+<div class="review-layout">
+<div class="review-content">
+<section class="panel">
+<div class="panel-heading">
+<div><p class="eyebrow">REVIEW ARTIFACT</p><h2>Campaign copy</h2>
+</div><label class="version-label">Content version<select id="version"></select></label>
+</div>
+<div class="panel-body"><p id="version-meta" class="muted"></p>
+<div id="copy" class="copy-preview">
+</div>
+<div id="asset" class="asset-context">
+</div><p class="small">Review covers the pasted copy. Linked pages and visual assets are context only.</p>
+</div>
+</section>
+<section id="revision-panel" class="panel" hidden>
+<div class="panel-heading">
+<div><p class="eyebrow">NEXT STEP</p><h2>Revise and resubmit</h2>
+</div>
+</div>
+<form id="revision-form" class="panel-body form-stack"><label>Revised copy <span class="small">1–20,000 characters</span><textarea id="revision-copy" name="copy_text" required maxlength="20000" rows="8"></textarea></label><label>Asset URL <span class="small">Optional · http(s) · max 2,048 characters</span><input id="revision-url" name="asset_url" type="url" maxlength="2048"></label><p class="small">A revision creates a new version and retains the original review deadline.</p><button type="submit" class="primary">Submit revised version →</button>
+</form>
+</section>
+<section class="panel">
+<div class="panel-heading">
+<div><p class="eyebrow">AUDIT TRAIL</p><h2>Activity & decisions</h2>
+</div><span class="small">Version-linked history</span>
+</div>
+<ol id="timeline" class="timeline">
+</ol>
+</section>
+</div>
+<aside class="review-sidebar">
+<section class="panel">
+<div class="panel-heading">
+<div><p class="eyebrow">DEMO POLICY CHECK</p><h2 id="preflight-title">Preflight</h2>
+</div>
+</div>
+<div class="panel-body"><p id="preflight-summary"></p>
+<div id="findings">
+</div><p class="small">Deterministic checks against fictional ClearPath policies. A passing check still requires a reviewer’s decision.</p>
+</div>
+</section>
+<section class="panel">
+<div class="panel-heading"><h2>Next action</h2>
+</div>
+<div class="panel-body"><p id="next-action"></p>
+<form id="decision-form" class="form-stack" hidden><label>Decision comment <span class="small">Required for changes or rejection · max 2,000</span><textarea id="decision-comment" maxlength="2000" rows="4"></textarea></label><button id="approve" type="submit" value="approve" class="primary">Approve version</button><p id="approve-hint" class="small"></p>
+<div class="actions"><button type="submit" value="request-changes">Request changes</button><button type="submit" value="reject" class="danger">Reject</button>
+</div>
+</form>
+<form id="assign-form" class="form-stack" hidden><hr><label>Assigned reviewer<select id="assign-reviewer"></select></label><label>Assignment reason <span class="small">Required when replacing a reviewer · max 2,000</span><textarea id="assign-comment" rows="2" maxlength="2000"></textarea></label><button type="submit">Update assignment</button>
+</form>
+</div>
+</section>
+</aside>
+</div>
+</div>
+</main>
+<footer class="app-footer"><span>ClearPath Financial · Internal marketing review</span><span>Fictional demo policies · Human review required</span>
+</footer>
+<script type="module" src="/static/submission.js">
+</script>
 </body>
 </html>

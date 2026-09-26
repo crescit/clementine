@@ -1,0 +1,14 @@
+# Free demo: Render's temporary filesystem is reseeded on each fresh start.
+# For persistent data, use Docker Compose locally or attach a paid disk at /data.
+services:
+  - type: web
+    name: clearpath-compliance
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DEMO_MODE
+        value: "true"
+      - key: DATABASE_PATH
+        value: /data/clearpath.db

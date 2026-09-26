@@ -23,8 +23,7 @@ from clearpath.preflight import (
 
 # The seeded hero campaign CP-8904 (plan §8 walkthrough step 2).
 HERO_COPY = (
-    "You're pre-approved for ClearRewards. "
-    "Explore rewards for everyday purchases."
+    "You're pre-approved for ClearRewards. Explore rewards for everyday purchases."
 )
 HERO_PRODUCT = Product.CREDIT_CARD
 HERO_CHANNEL = Channel.SOCIAL
@@ -42,6 +41,7 @@ def _rule_ids(preflight: dict) -> set[str]:
 
 
 # --- Hero v1: exactly the two expected rule IDs ------------------------------
+
 
 def test_hero_v1_returns_exactly_claim001_and_disc001() -> None:
     result = run_preflight(HERO_PRODUCT, HERO_CHANNEL, HERO_COPY)
@@ -61,6 +61,7 @@ def test_hero_v1_policy_version_is_frozen() -> None:
 
 # --- Corrected v2: passing copy ----------------------------------------------
 
+
 def test_corrected_v2_passes() -> None:
     result = run_preflight(HERO_PRODUCT, HERO_CHANNEL, CORRECTED_COPY)
     assert result["passed"] is True
@@ -68,6 +69,7 @@ def test_corrected_v2_passes() -> None:
 
 
 # --- Claim detection variants -------------------------------------------------
+
 
 def test_claim001_matches_case_insensitive_and_spacing_variants() -> None:
     cases = [
@@ -105,6 +107,7 @@ def test_benign_prequalified_copy_does_not_trigger_claim001() -> None:
 
 # --- Disclosure scoping --------------------------------------------------------
 
+
 def test_disc001_required_for_personal_loan_and_credit_card() -> None:
     copy = "Get pre-approved for a loan today."
     for product in (Product.PERSONAL_LOAN, Product.CREDIT_CARD):
@@ -114,14 +117,18 @@ def test_disc001_required_for_personal_loan_and_credit_card() -> None:
 
 def test_disc001_not_required_for_mortgage() -> None:
     copy = "Get pre-approved for your mortgage today."
-    ids = {f["rule_id"] for f in scan_copy(Product.MORTGAGE_PREQUALIFICATION, Channel.EMAIL, copy)}
+    ids = {
+        f["rule_id"]
+        for f in scan_copy(Product.MORTGAGE_PREQUALIFICATION, Channel.EMAIL, copy)
+    }
     assert "DISC_001" not in ids
 
 
 def test_disc002_required_for_mortgage_only() -> None:
     copy = "Get pre-approved for a loan today."
     assert "DISC_002" in {
-        f["rule_id"] for f in scan_copy(Product.MORTGAGE_PREQUALIFICATION, Channel.EMAIL, copy)
+        f["rule_id"]
+        for f in scan_copy(Product.MORTGAGE_PREQUALIFICATION, Channel.EMAIL, copy)
     }
     assert "DISC_002" not in {
         f["rule_id"] for f in scan_copy(Product.CREDIT_CARD, Channel.EMAIL, copy)
@@ -147,11 +154,12 @@ def test_corrected_copy_satisfies_all_disclosures_for_hero_campaign() -> None:
 
 # --- Emoji offset semantics ----------------------------------------------------
 
+
 def test_finding_offsets_are_unicode_code_points() -> None:
     # Copy with an emoji *before* the forbidden phrase. Finding offsets must be
     # Unicode code points (like JS Array.from semantics), so slicing the
     # code-point array at the finding offsets recovers the exact matched text.
-    copy = "\U0001F680 Get pre-approved for a loan today."
+    copy = "\U0001f680 Get pre-approved for a loan today."
     findings = scan_copy(Product.CREDIT_CARD, Channel.EMAIL, copy)
     claim = next(f for f in findings if f["rule_id"] == "CLAIM_001")
     start, end = claim["start"], claim["end"]
@@ -169,4 +177,4 @@ def test_finding_matched_text_is_exact() -> None:
     findings = scan_copy(Product.CREDIT_CARD, Channel.EMAIL, copy)
     claim = next(f for f in findings if f["rule_id"] == "CLAIM_001")
     assert claim["matched_text"] == "PRE-APPROVED"
-    assert copy[claim["start"]:claim["end"]] == "PRE-APPROVED"
+    assert copy[claim["start"] : claim["end"]] == "PRE-APPROVED"

@@ -1,41 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ClearPath · New Submission</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>New submission · ClearPath</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="app-header">
-    <div class="brand">
-      <span class="brand-name">ClearPath</span>
-      <span class="brand-sep" aria-hidden="true">/</span>
-      <span class="brand-product">Compliance</span>
-    </div>
-    <p class="demo-banner" role="status">
-      Demo workspace · fictional data · shared state
-    </p>
-    <div class="header-actions" id="header-actions">
-      <!-- Persona switcher lands in K7 -->
-    </div>
-  </header>
-  <main id="main" class="app-main">
-    <section class="shell-placeholder" aria-labelledby="intake-title">
-      <h1 id="intake-title">New Submission</h1>
-      <p class="lede">
-        Structured intake form arrives in a later card: title, optional partner,
-        channel, product, launch date, optional asset URL, and pasted copy.
-        Successful intake navigates to the submission detail page.
-      </p>
-      <p class="nav-links">
-        <a href="/static/index.html">Back to queue</a>
-        ·
-        <a href="/static/submission.html?id=cp-8904">Review workspace (sample id)</a>
-      </p>
-    </section>
-  </main>
-  <script type="module" src="/static/submit.js"></script>
+<body><a class="skip-link" href="#main">Skip to content</a>
+<header class="app-header"><a class="brand" href="/"><span class="brand-icon" aria-hidden="true">C<span>↗</span></span>ClearPath<span class="brand-product">Compliance</span></a>
+<div id="header-actions" class="header-actions">
+</div>
+</header>
+<div class="workspace-bar"><span><span class="live-dot"></span>Demo workspace · fictional data · shared state</span><span>Marketing review workspace</span>
+</div>
+<main id="main" class="app-main"><a class="back-link" href="/">← Back to queue</a>
+<div class="page-heading">
+<div><p class="eyebrow">WORKSPACE / INTAKE</p><h1>Start with clear context<span class="heading-dot">.</span></h1><p class="lede">Give your reviewer everything they need to move your campaign forward.</p>
+</div><span class="step-tag">01 — New submission</span>
+</div>
+<div id="notice" class="notice" role="status" hidden>
+</div>
+<div class="intake-layout">
+<section class="panel">
+<div class="panel-heading">
+<div><h2>Campaign details</h2><p class="muted">All fields are required unless marked optional.</p>
+</div>
+</div>
+<form id="intake-form" class="panel-body form-stack">
+<fieldset id="intake-fields" disabled><label>Campaign title <span class="small">3–120 characters</span><input name="title" required minlength="3" maxlength="120" placeholder="e.g. ClearRewards fall campaign"></label>
+<div class="form-grid"><label>Product<select name="product" required><option value="">Select a product</option><option value="PERSONAL_LOAN">Personal loan</option><option value="CREDIT_CARD">Credit card</option><option value="MORTGAGE_PREQUALIFICATION">Mortgage prequalification</option></select></label><label>Channel<select id="channel" name="channel" required><option value="">Select a channel</option><option value="EMAIL">Email</option><option value="SOCIAL">Social</option><option value="PAID_SEARCH">Paid search</option><option value="WEBSITE">Website</option><option value="AFFILIATE">Affiliate</option></select></label>
+</div><label id="partner-label" hidden>Affiliate partner <span class="small">Max 120 characters</span><input id="partner" name="partner" maxlength="120" placeholder="Partner name"></label>
+<div class="form-grid"><label>Target launch date <span class="small">Today or later · UTC</span><input id="launch-date" name="target_launch_date" type="date" required></label><label>Asset URL <span class="small">Optional · http(s) · max 2,048</span><input name="asset_url" type="url" maxlength="2048" placeholder="https://example.com/campaign"></label>
+</div><label>Ad copy <span class="small">1–20,000 characters · plain text</span><textarea name="copy_text" required maxlength="20000" rows="9" placeholder="Paste the complete copy, including disclosures, exactly as it will appear."></textarea></label><p class="small">The submitted text becomes Version 1. Your reviewer can request a revision without losing the original.</p>
+<div class="form-footer"><span class="small">Automatically assigned to an available reviewer.</span><button type="submit" class="primary">Submit for review →</button>
+</div>
+</fieldset>
+</form>
+</section>
+<aside>
+<section class="intake-guide"><span class="guide-number">A clearer path<br>to approval.</span><hr><h3>01 / Include the full copy</h3><p>Headlines, body text, and disclosures belong together.</p><h3>02 / Add the right context</h3><p>Product, channel, and launch date help the team prioritize.</p><h3>03 / Keep the loop connected</h3><p>Feedback, revisions, and decisions stay with your campaign.</p>
+</section><p class="small side-note">This demo accepts pasted text and an optional asset URL. Excel/email import and file attachments are outside the current scope.</p>
+</aside>
+</div>
+</main>
+<footer class="app-footer"><span>ClearPath Financial · Internal marketing review</span><span>Fictional demo policies · Human review required</span>
+</footer>
+<script type="module" src="/static/submit.js">
+</script>
 </body>
 </html>

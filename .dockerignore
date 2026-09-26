@@ -23,3 +23,9 @@ tests/
 .dockerignore
 Dockerfile
 docker-compose.yml
+
+# Reference assets are not part of this application.
+*.glb
+*.gltf
+*.jpeg
+scripts/

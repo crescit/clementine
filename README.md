@@ -1,15 +1,20 @@
 # ClearPath Compliance Review
 
-Demo workspace · fictional data · shared state.
+A working marketing review workspace for fictional ClearPath Financial. It replaces spreadsheet status tracking and disconnected email feedback with structured intake, assigned reviews, versioned copy, and a decision trail.
 
-Internal marketing compliance review queue for fictional ClearPath Financial. Marketers submit text ad copy; reviewers assign, request changes, approve, or reject. Not legal advice — demo policies only.
+**Demo workspace · fictional data · shared state.** The persona selector is intentional demo impersonation, not authentication. Policies and campaigns are synthetic.
 
-**Live demo:** _pending deployment (K15)_  
-**GitHub repo:** _pending publication (K15)_
+![ClearPath review queue](docs/screenshots/queue-desktop.png)
 
-## Quickstart (local)
+## Deploy on a free host
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+The repository includes a **Render Blueprint**. Push the project to your GitHub repository, then in Render choose **New → Blueprint**, connect that repository, and deploy. `render.yaml` selects the free Docker web service, configures the database path, and sets the health check. No API keys, frontend build, or separate database service are needed.
+
+**Free-host tradeoff:** Render sleeps idle free services and discards local files on sleep/restart/redeploy. The app automatically seeds a fresh demo workspace; visitor changes do not survive those events. For a persistent free presentation, run Docker Compose locally and share it through ngrok while your computer remains awake. Details and post-deploy checks are in [Deployment](docs/DEPLOYMENT.md).
+
+## Run locally
+
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv sync --frozen
@@ -17,49 +22,52 @@ uv run pytest
 uv run uvicorn clearpath.api:app --reload
 ```
 
-Open http://localhost:8000. No credentials or external services required.
+Open http://localhost:8000. The first launch creates and seeds `data/clearpath.db`; subsequent launches preserve work.
 
-### Environment
-
-Export variables in your shell (a `.env` file is **not** loaded automatically):
-
-```bash
-export DATABASE_PATH=./data/clearpath.db
-export DEMO_MODE=true
-export PORT=8000
-```
-
-See `.env.example` for documentation.
-
-## Quickstart (Docker)
+Or use Docker:
 
 ```bash
 docker compose up --build -d
 ```
 
-Maps port 8000, stores SQLite on a named volume at `/data`, enables demo mode. Restart preserves data; use the in-app reset (when available) to return to baseline.
+Compose stores the database on a named volume. Use **Reset demo** as a reviewer to restore the baseline. `.env.example` documents configuration; export variables for local execution because `.env` is not loaded automatically.
 
-## Personas (after seed — K1+)
+## Five-minute walkthrough
 
-| Name | Role | Notes |
-|---|---|---|
-| Sarah T. | Reviewer · Compliance Lead | Default persona |
-| Mark Davis | Reviewer · Compliance Analyst | Same review permissions as Sarah |
-| Jessica Lin | Submitter · Partnerships | Owns baseline submissions |
+1. Start as **Sarah T.** The baseline has six open campaigns, two past target, and two unassigned. Open **ClearRewards Launch (CP-8904)**.
+2. Inspect the highlighted approval claim and missing disclosure. Approval is blocked. Enter feedback and select **Request changes**.
+3. Switch to **Jessica Lin** on the same record. Paste this corrected copy into the revision form:
 
-## Status
+   > You may be pre-qualified for ClearRewards. Explore rewards for everyday purchases. Subject to credit approval.
 
-**K0 skeleton.** Health API, static shell, test harness, and Docker Compose boot. Domain schema, workflow, full API, and UI arrive in subsequent cards.
+4. Submit the revision. Version 2 returns directly to Sarah, retaining the original deadline. Select Version 1 to see the original copy and its findings.
+5. Switch to **Sarah**, select Version 2, and **Approve version**. The campaign moves to Completed, the decision records the actor/version/time, and queue metrics update.
+6. As Jessica, submit an affiliate campaign to see automatic assignment. Include both `Subject to credit approval.` and `ClearPath may compensate this partner.` for a personal loan or credit card. Mortgage copy instead needs `Prequalification is not a commitment to lend.` plus the partner disclosure.
 
-## Corrected demo copy (golden walkthrough)
+Mark and Sarah share reviewer permissions, but only the assigned reviewer can decide. Reassignment requires a reason. Jessica creates and revises her own submissions.
 
-Used when revising CP-8904 (available after seed/UI cards):
+## Why this addresses the bottleneck
 
-> You may be pre-qualified for ClearRewards. Explore rewards for everyday purchases. Subject to credit approval.
+| Coordination cost | Product behavior |
+|---|---|
+| Review starts with missing information | Required product, channel, launch date, full copy, and affiliate partner |
+| Requests sit without an owner | Least-loaded reviewer assignment; explicit reassignment |
+| Reviewers cannot identify urgent work | Deadline-ranked queue, ownership/status/search/risk filters |
+| Repeated manual checking | Explainable checks on pasted copy; server-enforced approval gate |
+| Feedback gets detached from revisions | Immutable versions with version-linked decisions and comments |
+| Marketers chase status through email | Visible status, next owner, and revision form on the same record |
+| Team cannot see flow | Database-derived open, breached, unassigned, completed, and turnaround metrics |
 
-## Docs
+This is a testable throughput hypothesis, not evidence of measured improvement. [Product decisions](docs/PRODUCT_DECISIONS.md) explains assumptions, rollout measures, and tradeoffs.
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Product decisions](docs/PRODUCT_DECISIONS.md)
-- [Verification](docs/VERIFICATION.md)
-- [Implementation plan](clearpath_takehome_build_plan.md)
+## Verification and scope
+
+`uv run pytest` exercises API integration, permissions, state transitions, policy rules, metric boundaries, rollback, and concurrent decisions. A repeatable real-browser acceptance script is in `scripts/browser_check.py`; run it **only against a disposable demo database** because it resets shared state. See [Verification](docs/VERIFICATION.md) for executed checks and screenshots.
+
+FastAPI + SQLite + plain HTML/CSS/browser-native JavaScript. No npm, frontend compilation, external AI calls, or credentials. One server process/worker. Reviewed artifacts are pasted text; links are context only. Excel/email describe the original process, not required imported inputs. Real email, file import, production identity, jurisdictional legal coverage, and automated legal approval are outside this take-home.
+
+[Deployment](docs/DEPLOYMENT.md) · [Architecture](docs/ARCHITECTURE.md) · [Presentation notes](docs/PRESENTATION.md)
+
+## Scale testing and performance handoff
+
+The existing app has been benchmarked with **1k, 10k, and 100k synthetic submissions**, concurrent HTTP traffic, workflow writes, and browser network emulation. The tests expose significant large-queue and metrics bottlenecks; optimization recommendations are documented, **not implemented**. See [Performance baseline and prioritized handoff](docs/PERFORMANCE.md) and [reproducible test commands](scripts/performance/README.md).

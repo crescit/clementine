@@ -111,8 +111,7 @@ def get_user_version(conn: sqlite3.Connection) -> int:
 
 def _table_names(conn: sqlite3.Connection) -> list[str]:
     rows = conn.execute(
-        "SELECT name FROM sqlite_master "
-        "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
     ).fetchall()
     return [str(r["name"]) for r in rows]
 
@@ -144,7 +143,10 @@ def initialize_schema(conn: sqlite3.Connection) -> bool:
     # Version matches but the expected tables are missing: the file is corrupt
     # or was built by a different schema. Refuse to silently reset it.
     expected = {
-        "users", "submissions", "submission_versions", "audit_events",
+        "users",
+        "submissions",
+        "submission_versions",
+        "audit_events",
     }
     missing = expected - set(tables)
     if missing:

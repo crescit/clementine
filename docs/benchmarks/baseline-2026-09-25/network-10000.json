@@ -1,0 +1,319 @@
+{
+  "database": "docs/benchmarks/baseline-2026-09-25/scale-10000.db",
+  "browser": "154.0.8037.57",
+  "results": [
+    {
+      "profile": "unthrottled",
+      "cache": "cold_cache",
+      "ready_ms": 1153.0,
+      "timed_out": false,
+      "latency_ms": 0,
+      "download_bytes_per_second": -1,
+      "upload_bytes_per_second": -1,
+      "javascript_errors": [],
+      "rows": 6006,
+      "dom_nodes": 84476,
+      "navigation": [
+        {
+          "domContentLoaded_ms": 59.5,
+          "load_ms": 60.39999997615814,
+          "transfer_bytes": 4215
+        }
+      ],
+      "resources": [
+        {
+          "path": "/static/styles.css",
+          "duration_ms": 8.899999976158142,
+          "transfer_bytes": 16710,
+          "encoded_bytes": 16410,
+          "decoded_bytes": 16410
+        },
+        {
+          "path": "/static/queue.js",
+          "duration_ms": 9,
+          "transfer_bytes": 5635,
+          "encoded_bytes": 5335,
+          "decoded_bytes": 5335
+        },
+        {
+          "path": "/static/common.js",
+          "duration_ms": 2.100000023841858,
+          "transfer_bytes": 4417,
+          "encoded_bytes": 4117,
+          "decoded_bytes": 4117
+        },
+        {
+          "path": "/api/users",
+          "duration_ms": 6.5,
+          "transfer_bytes": 34717,
+          "encoded_bytes": 34417,
+          "decoded_bytes": 34417
+        },
+        {
+          "path": "/api/submissions",
+          "duration_ms": 440.3000000715256,
+          "transfer_bytes": 10970965,
+          "encoded_bytes": 10970665,
+          "decoded_bytes": 10970665
+        },
+        {
+          "path": "/api/metrics",
+          "duration_ms": 179,
+          "transfer_bytes": 510,
+          "encoded_bytes": 210,
+          "decoded_bytes": 210
+        },
+        {
+          "path": "/api/config",
+          "duration_ms": 5.199999928474426,
+          "transfer_bytes": 319,
+          "encoded_bytes": 19,
+          "decoded_bytes": 19
+        },
+        {
+          "path": "/static/favicon.svg",
+          "duration_ms": 6.799999952316284,
+          "transfer_bytes": 568,
+          "encoded_bytes": 268,
+          "decoded_bytes": 268
+        }
+      ],
+      "notice": "\n"
+    },
+    {
+      "profile": "unthrottled",
+      "cache": "warm_cache",
+      "ready_ms": 1265.8,
+      "timed_out": false,
+      "latency_ms": 0,
+      "download_bytes_per_second": -1,
+      "upload_bytes_per_second": -1,
+      "javascript_errors": [],
+      "rows": 6006,
+      "dom_nodes": 84476,
+      "navigation": [
+        {
+          "domContentLoaded_ms": 171,
+          "load_ms": 174,
+          "transfer_bytes": 0
+        }
+      ],
+      "resources": [
+        {
+          "path": "/static/styles.css",
+          "duration_ms": 0,
+          "transfer_bytes": 0,
+          "encoded_bytes": 16410,
+          "decoded_bytes": 16410
+        },
+        {
+          "path": "/static/queue.js",
+          "duration_ms": 0,
+          "transfer_bytes": 0,
+          "encoded_bytes": 5335,
+          "decoded_bytes": 5335
+        },
+        {
+          "path": "/static/common.js",
+          "duration_ms": 0,
+          "transfer_bytes": 0,
+          "encoded_bytes": 4117,
+          "decoded_bytes": 4117
+        },
+        {
+          "path": "/api/users",
+          "duration_ms": 5,
+          "transfer_bytes": 34717,
+          "encoded_bytes": 34417,
+          "decoded_bytes": 34417
+        },
+        {
+          "path": "/api/submissions",
+          "duration_ms": 450.60000002384186,
+          "transfer_bytes": 10970965,
+          "encoded_bytes": 10970665,
+          "decoded_bytes": 10970665
+        },
+        {
+          "path": "/api/config",
+          "duration_ms": 5.300000071525574,
+          "transfer_bytes": 319,
+          "encoded_bytes": 19,
+          "decoded_bytes": 19
+        },
+        {
+          "path": "/api/metrics",
+          "duration_ms": 176.20000004768372,
+          "transfer_bytes": 510,
+          "encoded_bytes": 210,
+          "decoded_bytes": 210
+        },
+        {
+          "path": "/static/favicon.svg",
+          "duration_ms": 0.3999999761581421,
+          "transfer_bytes": 0,
+          "encoded_bytes": 268,
+          "decoded_bytes": 268
+        }
+      ],
+      "notice": "\n"
+    },
+    {
+      "profile": "broadband_10Mbps_40ms",
+      "cache": "cold_cache",
+      "ready_ms": 10160.1,
+      "timed_out": false,
+      "latency_ms": 40,
+      "download_bytes_per_second": 1250000.0,
+      "upload_bytes_per_second": 250000.0,
+      "javascript_errors": [],
+      "rows": 6006,
+      "dom_nodes": 84476,
+      "navigation": [
+        {
+          "domContentLoaded_ms": 156,
+          "load_ms": 156.89999997615814,
+          "transfer_bytes": 4215
+        }
+      ],
+      "resources": [
+        {
+          "path": "/static/styles.css",
+          "duration_ms": 67.60000002384186,
+          "transfer_bytes": 16710,
+          "encoded_bytes": 16410,
+          "decoded_bytes": 16410
+        },
+        {
+          "path": "/static/queue.js",
+          "duration_ms": 56.60000002384186,
+          "transfer_bytes": 5635,
+          "encoded_bytes": 5335,
+          "decoded_bytes": 5335
+        },
+        {
+          "path": "/static/common.js",
+          "duration_ms": 47.40000009536743,
+          "transfer_bytes": 4417,
+          "encoded_bytes": 4117,
+          "decoded_bytes": 4117
+        },
+        {
+          "path": "/api/users",
+          "duration_ms": 73.59999990463257,
+          "transfer_bytes": 34717,
+          "encoded_bytes": 34417,
+          "decoded_bytes": 34417
+        },
+        {
+          "path": "/static/favicon.svg",
+          "duration_ms": 42.5,
+          "transfer_bytes": 568,
+          "encoded_bytes": 268,
+          "decoded_bytes": 268
+        },
+        {
+          "path": "/api/submissions",
+          "duration_ms": 9273.199999928474,
+          "transfer_bytes": 10970965,
+          "encoded_bytes": 10970665,
+          "decoded_bytes": 10970665
+        },
+        {
+          "path": "/api/metrics",
+          "duration_ms": 228,
+          "transfer_bytes": 510,
+          "encoded_bytes": 210,
+          "decoded_bytes": 210
+        },
+        {
+          "path": "/api/config",
+          "duration_ms": 44.40000009536743,
+          "transfer_bytes": 319,
+          "encoded_bytes": 19,
+          "decoded_bytes": 19
+        }
+      ],
+      "notice": "\n"
+    },
+    {
+      "profile": "mobile_1.6Mbps_150ms",
+      "cache": "cold_cache",
+      "ready_ms": 56827.7,
+      "timed_out": false,
+      "latency_ms": 150,
+      "download_bytes_per_second": 200000.0,
+      "upload_bytes_per_second": 93750.0,
+      "javascript_errors": [],
+      "rows": 6006,
+      "dom_nodes": 84476,
+      "navigation": [
+        {
+          "domContentLoaded_ms": 562,
+          "load_ms": 562.8999999761581,
+          "transfer_bytes": 4215
+        }
+      ],
+      "resources": [
+        {
+          "path": "/static/styles.css",
+          "duration_ms": 277.3000000715256,
+          "transfer_bytes": 16710,
+          "encoded_bytes": 16410,
+          "decoded_bytes": 16410
+        },
+        {
+          "path": "/static/queue.js",
+          "duration_ms": 210.79999995231628,
+          "transfer_bytes": 5635,
+          "encoded_bytes": 5335,
+          "decoded_bytes": 5335
+        },
+        {
+          "path": "/static/common.js",
+          "duration_ms": 170.79999995231628,
+          "transfer_bytes": 4417,
+          "encoded_bytes": 4117,
+          "decoded_bytes": 4117
+        },
+        {
+          "path": "/api/users",
+          "duration_ms": 334.2999999523163,
+          "transfer_bytes": 34717,
+          "encoded_bytes": 34417,
+          "decoded_bytes": 34417
+        },
+        {
+          "path": "/static/favicon.svg",
+          "duration_ms": 159.89999997615814,
+          "transfer_bytes": 568,
+          "encoded_bytes": 268,
+          "decoded_bytes": 268
+        },
+        {
+          "path": "/api/submissions",
+          "duration_ms": 55278.199999928474,
+          "transfer_bytes": 10970965,
+          "encoded_bytes": 10970665,
+          "decoded_bytes": 10970665
+        },
+        {
+          "path": "/api/metrics",
+          "duration_ms": 176,
+          "transfer_bytes": 510,
+          "encoded_bytes": 210,
+          "decoded_bytes": 210
+        },
+        {
+          "path": "/api/config",
+          "duration_ms": 160.30000007152557,
+          "transfer_bytes": 319,
+          "encoded_bytes": 19,
+          "decoded_bytes": 19
+        }
+      ],
+      "notice": "\n"
+    }
+  ],
+  "note": "Chrome DevTools bandwidth/latency emulation, not physical WAN or a production load balancer. App/backend and browser share a host. Single visit per profile; exploratory rather than percentile evidence."
+}
