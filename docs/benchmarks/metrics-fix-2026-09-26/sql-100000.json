@@ -1,0 +1,44 @@
+{
+  "/api/submissions?limit=50&offset=0": {
+    "http_status": 200,
+    "select_statements": 3,
+    "response_bytes": 27505,
+    "returned_queue_rows": 50,
+    "reported_total": 60006,
+    "limit": 50,
+    "offset": 0,
+    "sql_examples": [
+      "SELECT id, name, role, display_title FROM users",
+      "SELECT COUNT(*) FROM submissions",
+      "SELECT id, external_id, title, partner, channel, product, status, assigned_reviewer_id, submitter_id, target_launch_date, submitted_at, sla_breach_at, decided_at, current_version, record_version FROM submissions"
+    ]
+  },
+  "/api/metrics": {
+    "http_status": 200,
+    "select_statements": 3,
+    "response_bytes": 215,
+    "returned_queue_rows": 0,
+    "reported_total": null,
+    "limit": null,
+    "offset": null,
+    "sql_examples": [
+      "SELECT id, name, role, display_title FROM users",
+      "SELECT\n          COUNT(*) AS open_count,\n          COALESCE(SUM(CASE WHEN (CASE WHEN sla_breach_at GLOB '????-??-??T??:??:??Z' THEN SUBSTR(sla_breach_at, 1, 19) || '.000000' WHEN sla_breach_at GLOB '????-??-??T??:??:??+00:00' THEN SUBSTR(sla_breach_at, 1, 19) || '.000000' ELSE (SUBSTR(sla_breach_at, 1, 19) || '.' || SUBSTR(SUBSTR(REPLACE(REPLACE(sla_breach_at, 'Z', ''), '+00:00', ''), 21) || '000000', 1, 6)) END) <= '2026-09-26T07:11:24.883105' THEN 1 ELSE 0 END), 0)\n            AS sla_breached_count,\n          COALESCE(SUM(CASE WHEN assigned_reviewer_id IS NULL THEN 1 ELSE 0 END), 0)\n            AS unassigned_count\n        FROM submissions",
+      "SELECT\n          COALESCE(SUM(CASE WHEN decided_n >= '2026-09-19T07:11:24.883105' AND decided_n <= '2026-09-26T07:11:24.883105' THEN 1 ELSE 0 END), 0)\n            AS completed_last_7_days,\n          AVG(CASE WHEN decided_n >= '2026-08-27T07:11:24.883105' AND decided_n <= '2026-09-26T07:11:24.883105'\n            AND decided_n >= submitted_n\n            THEN (julianday(decided_n) - julianday(submitted_n))\n            ELSE NULL END)\n            AS avg_turnaround_days,\n          COALESCE(SUM(CASE WHEN decided_n >= '2026-08-27T07:11:24.883105' AND decided_n <= '2026-09-26T07:11:24.883105'\n            AND decided_n >= submitted_n THEN 1 ELSE 0 END), 0)\n            AS turnaround_sample_size\n        FROM (\n          SELECT\n            (CASE WHEN decided_at GLOB '????-??-??T??:??:??Z' THEN SUBSTR(decided_at, 1, 19) || '.000000' WHEN decided_at GLOB '????-??-??T??:??:??+00:00' THEN SUBSTR(decided_at, 1, 19) || '.000000' ELSE (SUBSTR(decided_at, 1, 19) || '.' || SUBSTR(SUBSTR(REPLACE(REPLACE(decided_at, 'Z', ''), '+00:00', ''), 21) || '000000', 1, 6)) END) AS decided_n,\n            (CASE WHEN submitted_at GLOB '????-??-??T??:??:??Z' THEN SUBSTR(submitted_at, 1, 19) || '.000000' WHEN submitted_at GLOB '????-??-??T??:??:??+00:00' THEN SUBSTR(submitted_at, 1, 19) || '.000000' ELSE (SUBSTR(submitted_at, 1, 19) || '.' || SUBSTR(SUBSTR(REPLACE(REPLACE(submitted_at, 'Z', ''), '+00:00', ''), 21) || '000000', 1, 6)) END) AS submitted_n\n          FROM submissions"
+    ]
+  },
+  "/api/submissions?search=Campaign%200009&limit=50": {
+    "http_status": 200,
+    "select_statements": 3,
+    "response_bytes": 27291,
+    "returned_queue_rows": 50,
+    "reported_total": 60,
+    "limit": 50,
+    "offset": 0,
+    "sql_examples": [
+      "SELECT id, name, role, display_title FROM users",
+      "SELECT COUNT(*) FROM submissions",
+      "SELECT id, external_id, title, partner, channel, product, status, assigned_reviewer_id, submitter_id, target_launch_date, submitted_at, sla_breach_at, decided_at, current_version, record_version FROM submissions"
+    ]
+  }
+}

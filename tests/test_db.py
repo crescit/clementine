@@ -56,7 +56,7 @@ def test_schema_creates_four_tables_and_indexes(temp_db: Path) -> None:
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
     )
     names = {r["name"] for r in rows}
-    assert {"users", "submissions", "submission_versions", "audit_events"} <= names
+    assert {"users", "submissions", "submission_versions", "audit_events", "notifications"} <= names
 
     indexes = {
         r["name"]
@@ -69,6 +69,8 @@ def test_schema_creates_four_tables_and_indexes(temp_db: Path) -> None:
         "idx_versions_submission",
         "idx_audit_submission",
         "idx_audit_created",
+        "idx_notifications_inbox",
+        "idx_notifications_unread",
     ]:
         assert want in indexes, f"missing index {want}"
 
@@ -258,6 +260,33 @@ def test_reset_generates_fresh_uuids(temp_db: Path) -> None:
     assert len(_query(temp_db, "SELECT * FROM submissions")) == 7
 
 
+def test_seed_and_reset_leave_unread_notifications(temp_db: Path) -> None:
+    """Demo reset should refill every persona's inbox so the bell is never empty."""
+    _seed(temp_db)
+
+    def unread_by_name() -> dict[str, int]:
+        rows = _query(
+            temp_db,
+            "SELECT u.name AS name, COUNT(*) AS n "
+            "FROM notifications n JOIN users u ON u.id = n.recipient_id "
+            "WHERE n.read_at IS NULL GROUP BY u.name",
+        )
+        return {r["name"]: r["n"] for r in rows}
+
+    first = unread_by_name()
+    assert first.get("Sarah T.", 0) >= 1
+    assert first.get("Mark Davis", 0) >= 1
+    assert first.get("Jessica Lin", 0) >= 1
+    # Reviewers get assignment notices; submitter gets ownership + decisions.
+    assert sum(first.values()) >= 5
+
+    seed.reset_database(temp_db, FROZEN)
+    again = unread_by_name()
+    assert again.get("Sarah T.", 0) >= 1
+    assert again.get("Mark Davis", 0) >= 1
+    assert again.get("Jessica Lin", 0) >= 1
+
+
 def test_failing_reset_rolls_back(
     temp_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -278,6 +307,88 @@ def test_failing_reset_rolls_back(
     still = _row(temp_db, "SELECT * FROM submissions WHERE external_id='CP-8902'")
     assert still is not None
     assert len(_query(temp_db, "SELECT * FROM submissions")) == 7
+
+
+def test_schema_v1_migrates_to_notifications(tmp_path: Path) -> None:
+    """Existing v1 databases gain a durable notifications table without wipe."""
+    path = tmp_path / "v1.db"
+    conn = db.connect(path)
+    try:
+        # Build a minimal v1-shaped DB, then ask initialize_schema to migrate.
+        conn.executescript(
+            """
+            CREATE TABLE users (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL,
+                display_title TEXT, created_at TEXT NOT NULL
+            );
+            CREATE TABLE submissions (
+                id TEXT PRIMARY KEY, external_id TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL, partner TEXT, channel TEXT NOT NULL,
+                product TEXT NOT NULL, status TEXT NOT NULL,
+                assigned_reviewer_id TEXT, submitter_id TEXT NOT NULL,
+                target_launch_date TEXT NOT NULL, submitted_at TEXT NOT NULL,
+                sla_breach_at TEXT NOT NULL, decided_at TEXT,
+                current_version INTEGER NOT NULL, record_version INTEGER NOT NULL,
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            );
+            CREATE TABLE submission_versions (
+                id TEXT PRIMARY KEY, submission_id TEXT NOT NULL,
+                version_number INTEGER NOT NULL, asset_url TEXT,
+                copy_text TEXT NOT NULL, created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE audit_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                submission_id TEXT NOT NULL, actor_id TEXT NOT NULL,
+                event_type TEXT NOT NULL, from_status TEXT, to_status TEXT,
+                version_number INTEGER, comment TEXT, metadata_json TEXT,
+                created_at TEXT NOT NULL
+            );
+            PRAGMA user_version = 1;
+            """
+        )
+        conn.execute(
+            "INSERT INTO users (id, name, role, display_title, created_at) "
+            "VALUES ('s1', 'Jess', 'SUBMITTER', 'P', '2026-09-25T00:00:00Z'), "
+            "('r1', 'Mark', 'REVIEWER', 'A', '2026-09-25T00:00:00Z')"
+        )
+        conn.execute(
+            "INSERT INTO submissions (id, external_id, title, partner, channel, product, "
+            "status, assigned_reviewer_id, submitter_id, target_launch_date, submitted_at, "
+            "sla_breach_at, decided_at, current_version, record_version, created_at, updated_at) "
+            "VALUES ('sub1', 'CP-1', 'T', NULL, 'WEBSITE', 'PERSONAL_LOAN', 'UNDER_REVIEW', "
+            "'r1', 's1', '2026-10-01', '2026-09-25T00:00:00Z', '2026-09-28T00:00:00Z', "
+            "NULL, 1, 1, '2026-09-25T00:00:00Z', '2026-09-25T00:00:00Z')"
+        )
+        conn.execute(
+            "INSERT INTO audit_events (submission_id, actor_id, event_type, from_status, "
+            "to_status, version_number, comment, metadata_json, created_at) VALUES "
+            "('sub1', 's1', 'AUTO_ASSIGNED', 'PENDING_ASSIGNMENT', 'UNDER_REVIEW', 1, NULL, "
+            "'{\"assignee_id\":\"r1\"}', '2026-09-25T00:00:00Z')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    conn = db.connect(path)
+    try:
+        assert db.initialize_schema(conn) is False
+        assert db.get_user_version(conn) == 2
+        assert "notifications" in {
+            r["name"]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        note = conn.execute(
+            "SELECT recipient_id, event_type, read_at FROM notifications"
+        ).fetchone()
+        assert note is not None
+        assert note["recipient_id"] == "r1"
+        assert note["event_type"] == "AUTO_ASSIGNED"
+        assert note["read_at"] is None
+    finally:
+        conn.close()
 
 
 def test_unsupported_schema_does_not_silently_reset(tmp_path: Path) -> None:

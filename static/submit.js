@@ -11,7 +11,9 @@ async function load() {
     actor
   } = await init();
   if (actor.role !== 'SUBMITTER') {
-    notice('Switch to Jessica Lin in the persona selector to submit a campaign. Reviewers manage decisions and assignments.');
+    notice('Switch to Jessica Lin in the persona selector to submit a campaign. Reviewers manage decisions and assignments.', false, {
+      sticky: true
+    });
     return;
   }
   $('intake-fields').disabled = false;

@@ -4,7 +4,7 @@ A working marketing review workspace for fictional ClearPath Financial. It repla
 
 **[Live demo](https://clearpath-compliance.onrender.com) · [GitHub repository](https://github.com/crescit/clementine)**
 
-**Demo workspace · fictional data · shared state.** The persona selector is intentional demo impersonation, not authentication. Policies and campaigns are synthetic.
+**Temp demo DB · seeded like prod.** The persona selector is intentional demo impersonation, not authentication. Policies and campaigns are synthetic.
 
 ![ClearPath review queue](docs/screenshots/queue-desktop.png)
 

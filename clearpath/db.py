@@ -1,9 +1,9 @@
 """Database connections, versioned schema, and transactions.
 
-K1: four domain tables (users, submissions, submission_versions, audit_events),
-per-connection pragmas, WAL, user_version, and a corrupt/unsupported-DB guard
-that never silently deletes or reseeds. One connection per operation, closed
-reliably; no shared global connection.
+K1: domain tables (users, submissions, submission_versions, audit_events,
+notifications), per-connection pragmas, WAL, user_version, and a
+corrupt/unsupported-DB guard that never silently deletes or reseeds. One
+connection per operation, closed reliably; no shared global connection.
 """
 
 from __future__ import annotations
@@ -12,7 +12,25 @@ import os
 import sqlite3
 from pathlib import Path
 
-SCHEMA_USER_VERSION = 1
+SCHEMA_USER_VERSION = 2
+
+_NOTIFICATIONS_DDL = """
+CREATE TABLE IF NOT EXISTS notifications (
+    id              TEXT PRIMARY KEY,
+    recipient_id    TEXT NOT NULL REFERENCES users(id),
+    submission_id   TEXT NOT NULL REFERENCES submissions(id),
+    audit_event_id  INTEGER NOT NULL REFERENCES audit_events(id),
+    event_type      TEXT NOT NULL,
+    headline        TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    read_at         TEXT,
+    UNIQUE (recipient_id, audit_event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_inbox
+    ON notifications(recipient_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread
+    ON notifications(recipient_id, read_at);
+"""
 
 _SCHEMA = """
 CREATE TABLE users (
@@ -73,6 +91,18 @@ CREATE TABLE audit_events (
     created_at    TEXT NOT NULL
 );
 
+CREATE TABLE notifications (
+    id              TEXT PRIMARY KEY,
+    recipient_id    TEXT NOT NULL REFERENCES users(id),
+    submission_id   TEXT NOT NULL REFERENCES submissions(id),
+    audit_event_id  INTEGER NOT NULL REFERENCES audit_events(id),
+    event_type      TEXT NOT NULL,
+    headline        TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    read_at         TEXT,
+    UNIQUE (recipient_id, audit_event_id)
+);
+
 CREATE INDEX idx_submissions_status   ON submissions(status);
 CREATE INDEX idx_submissions_reviewer ON submissions(assigned_reviewer_id);
 CREATE INDEX idx_submissions_sla      ON submissions(sla_breach_at);
@@ -81,7 +111,24 @@ CREATE INDEX idx_submissions_decided  ON submissions(decided_at);
 CREATE INDEX idx_versions_submission  ON submission_versions(submission_id);
 CREATE INDEX idx_audit_submission     ON audit_events(submission_id);
 CREATE INDEX idx_audit_created        ON audit_events(created_at);
+CREATE INDEX idx_notifications_inbox  ON notifications(recipient_id, created_at);
+CREATE INDEX idx_notifications_unread ON notifications(recipient_id, read_at);
 """
+
+_EXPECTED_TABLES = {
+    "users",
+    "submissions",
+    "submission_versions",
+    "audit_events",
+    "notifications",
+}
+
+_V1_TABLES = {
+    "users",
+    "submissions",
+    "submission_versions",
+    "audit_events",
+}
 
 
 def get_database_path() -> Path:
@@ -116,12 +163,22 @@ def _table_names(conn: sqlite3.Connection) -> list[str]:
     return [str(r["name"]) for r in rows]
 
 
+def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
+    """Add durable notifications and backfill from existing audit events."""
+    from clearpath.notifications import backfill
+
+    conn.executescript(_NOTIFICATIONS_DDL)
+    backfill(conn)
+    conn.execute(f"PRAGMA user_version = {SCHEMA_USER_VERSION}")
+    conn.commit()
+
+
 def initialize_schema(conn: sqlite3.Connection) -> bool:
-    """Initialize a fresh DB with the versioned schema, or validate an existing one.
+    """Initialize a fresh DB with the versioned schema, or validate/migrate.
 
     Returns True when the schema was created from an empty DB, False when an
-    existing supported DB was left untouched. Never deletes or reseeds a
-    nonempty/unsupported/corrupt database — raises instead.
+    existing supported DB was left untouched or migrated. Never deletes or
+    reseeds a nonempty/unsupported/corrupt database — raises instead.
     """
     version = get_user_version(conn)
     tables = _table_names(conn)
@@ -133,6 +190,16 @@ def initialize_schema(conn: sqlite3.Connection) -> bool:
         conn.commit()
         return True
 
+    if version == 1:
+        missing = _V1_TABLES - set(tables)
+        if missing:
+            raise RuntimeError(
+                f"Database is missing expected tables: {sorted(missing)}. "
+                "Do not delete the DB; restore a compatible file or use a fresh path."
+            )
+        _migrate_v1_to_v2(conn)
+        return False
+
     if version != SCHEMA_USER_VERSION:
         raise RuntimeError(
             f"Unsupported database schema version {version}; "
@@ -140,15 +207,7 @@ def initialize_schema(conn: sqlite3.Connection) -> bool:
             "restore a compatible file or use a fresh path."
         )
 
-    # Version matches but the expected tables are missing: the file is corrupt
-    # or was built by a different schema. Refuse to silently reset it.
-    expected = {
-        "users",
-        "submissions",
-        "submission_versions",
-        "audit_events",
-    }
-    missing = expected - set(tables)
+    missing = _EXPECTED_TABLES - set(tables)
     if missing:
         raise RuntimeError(
             f"Database is missing expected tables: {sorted(missing)}. "

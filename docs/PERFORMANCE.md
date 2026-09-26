@@ -1,16 +1,32 @@
 # Performance baseline and P0 implementation results
 
-**Status: P0 optimizations implemented and re-measured.** Bounded queue summaries with pagination and SQL metric aggregation shipped on 2026-09-26. The historical unbounded baseline remains in [baseline-2026-09-25](benchmarks/baseline-2026-09-25/) for comparison. New evidence: [p0-2026-09-26](benchmarks/p0-2026-09-26/).
+**Status: P0 shipped; metrics timestamp path optimized and re-measured.** Bounded queue summaries with pagination and SQL metric aggregation. Historical unbounded baseline: [baseline-2026-09-25](benchmarks/baseline-2026-09-25/). Latest metrics fix: [metrics-fix-2026-09-26](benchmarks/metrics-fix-2026-09-26/).
 
 ## Verdict
 
-**Final verification:** after a timestamp-boundary correctness fix, the final 100k run measured queue p95 **120 ms**, metrics p95 **5.56 s**, and sampled peak RSS **125.4 MiB**. The initial P0 numbers below remain historical evidence, not the final metrics timing.
+At 100k records (concurrency 10, ≥200 requests), the default queue page stays interactive (**128 ms** p95, 50 rows / ~27 KiB / 3 SELECTs). Metrics concurrent p95 is **266 ms** after a fast-path timestamp normalize — down from **5.56 s** with the correctness-oriented pad (and from **17.1 s** baseline). That is slightly above the 250 ms engineering budget; deep offsets and the write path remain separate limits.
 
-The unbounded queue response and Python-side metric materialization have been removed. The queue API meets the first-page latency target in this local run, but the UI also waits for metrics, which remain a bottleneck under concurrency. At 100k records, a default queue page returns **50 rows / ~27 KiB / 3 SELECTs** with concurrent p95 **122 ms**. Metrics still scan the corpus in SQL (no full Python materialization) and are much faster than baseline, but concurrent p95 at 100k (**3.7 s**) remains above the 250 ms engineering target — indexes and/or caching are the next lever. Write lifecycle latency is essentially unchanged (expected; P0 was read-path only).
+## Metrics fix (after final verification pad)
 
-## Initial P0 before → after (same machine class, loopback HTTP/1.1)
+The inclusive-boundary pad (`SUBSTR` / `REPLACE` on every comparison) preserved µs-correct comparisons but dominated CPU under concurrency. The current implementation:
 
-Baseline concurrency at 100k was reduced (queue×2, metrics×5). P0 re-measure uses **concurrency 10 and ≥200 requests** for queue and metrics on every corpus size. Compare “time to usable first page,” bytes, and SQL count — not identical-work throughput.
+- Uses a **GLOB fast path** for whole-second `Z` / `+00:00` forms (all generator fixtures), with the full six-digit pad only for mixed fractional forms
+- Scans **open and terminal** rows in separate status-filtered queries so indexes apply and each timestamp is normalized once in a subquery
+
+Boundary tests (including `.000000Z` vs whole-second and +1 µs exclusion) still pass. **152 tests** green.
+
+| Metrics at 100k, concurrency 10, 200 requests | p95 |
+|---|---:|
+| Baseline (Python materialize) | 17,105 ms (5 clients) |
+| Initial SQL aggregate | 3,744 ms |
+| After boundary pad (final-2026-09-26) | 5,557 ms |
+| **After fast-path + split scan** | **266 ms** |
+
+Artifacts: [results](benchmarks/metrics-fix-2026-09-26/results-100000.json), [SQL trace](benchmarks/metrics-fix-2026-09-26/sql-100000.json) (metrics: 3 SELECTs — identity + open + terminal). Sequential metrics p95 **99 ms**. Queue concurrent p95 **128 ms** on the same run.
+
+## Initial P0 before → after (historical)
+
+Baseline concurrency at 100k was reduced (queue×2, metrics×5). P0 re-measure uses **concurrency 10 and ≥200 requests**. Compare “time to usable first page,” bytes, and SQL count — not identical-work throughput.
 
 | Workload | Baseline 10k p95 | P0 10k p95 | Baseline 100k p95 | P0 100k p95 |
 |---|---:|---:|---:|---:|
@@ -24,45 +40,38 @@ Baseline concurrency at 100k was reduced (queue×2, metrics×5). P0 re-measure u
 | Uncompressed JSON (p50 / probe) | 10.46 MiB | **~27 KiB** | 105.04 MiB | **~27 KiB** |
 | SELECTs (traced) | 6,008 | **3** | — | **3** |
 
-Mandatory correctness: default ≤50 rows, max 100, no per-row content query — **met**. Target ≤64 KiB decoded JSON and ≤3 SELECTs on fixtures — **met**. Queue concurrent p95 ≤250 ms at 100k — **met (122 ms)**. Metrics concurrent p95 ≤250 ms at 100k — **not met (3.7 s)**. Browser/mobile re-measure was not run in the initial P0 pass; see the final verification below. Lifecycle p95 ≤1 s — **not met; unchanged writer path**.
+Mandatory correctness for queue bounds — **met**. Queue concurrent p95 ≤250 ms at 100k — **met**. Metrics ≤250 ms — **near miss at 266 ms** after the fast-path fix (was 5.56 s). Lifecycle p95 ≤1 s — **not met; unchanged writer path**.
 
-### Deep pages (new; not in baseline)
+### Deep pages
 
-Offset pagination is correct but deep offsets remain costly at 100k (middle/last page p95 ~0.9 s at concurrency 5). Documented limit; cursor pagination deferred.
+Offset pagination is correct but deep offsets remain costly at 100k (middle/last page p95 ~0.9–1.1 s at concurrency 5). Cursor pagination deferred.
 
-### Write integrity (unchanged guarantees)
+### Write integrity
 
-All lifecycle and contested-approval checks passed on 1k/10k/100k P0 runs. Exactly one approval wins contested writes; foreign keys and SQLite integrity OK.
+Lifecycle and contested-approval checks passed on measured runs. Exactly one approval wins contested writes; foreign keys and SQLite integrity OK.
 
 ## What changed
 
-1. **`GET /api/submissions`** returns summary rows only (no content join), with `total` / `limit` / `offset` (`limit` default 50, max 100). Same visibility/filter/sort semantics.
-2. **Queue UI** paginates with previous/next, range label (`1–50 of N`), filter-preserving links, out-of-range redirect, and persona/filter offset reset. Metrics stay persona-scoped, independent of page.
-3. **`compute_metrics`** aggregates in one SQL statement (conditional counts + turnaround average), preserving prior business rules including negative-duration exclusion on turnaround only.
-4. **Harness** requests `limit=50`, records row/total metadata, and runs focused queue/metrics phases (concurrency 1 and 10, ≥200 concurrent samples).
+1. **`GET /api/submissions`** — summary rows, `total` / `limit` / `offset` (default 50, max 100).
+2. **Queue UI** — previous/next, range label, filter-preserving links, out-of-range redirect, persona/filter offset reset.
+3. **`compute_metrics`** — SQL aggregates with unchanged business rules; fast-path UTC normalize + split open/terminal scans.
+4. **Harness** — explicit `limit=50`, row/total metadata, focused concurrent phases.
 
-## Remaining limits (next pass)
+## Remaining limits
 
-- Metrics at 100k still do an O(N) SQL scan with timestamp normalization (`REPLACE`); profile `EXPLAIN QUERY PLAN` and consider indexes or a short-lived cache only with invalidation tests.
-- Deep `OFFSET` pages; consider cursors if Product needs last-page browsing.
-- Write path (external-ID aggregate, reviewer load) unchanged — four-step lifecycle p95 still multi-second at 100k.
-- Browser/network profiles have now been re-run during final verification below; sustained mixed-user browser load remains untested.
-- Indexes (conditional P1) not added in this pass.
+- Metrics still O(N) over visible rows; **266 ms** vs **250 ms** target — indexes or a short-lived cache (with write invalidation) if the budget must be met strictly.
+- Deep `OFFSET` pages; write-path lifecycle latency; sustained/public-host capacity unclaimed.
 
 ## Reproduction and artifacts
 
 Commands: [benchmark tooling guide](../scripts/performance/README.md).
 
-- Baseline (pre-change): [baseline-2026-09-25](benchmarks/baseline-2026-09-25/)
-- P0 re-measure: [environment](benchmarks/p0-2026-09-26/environment.json), [1k](benchmarks/p0-2026-09-26/results-1000.json), [10k](benchmarks/p0-2026-09-26/results-10000.json), [100k](benchmarks/p0-2026-09-26/results-100000.json), [SQL 10k](benchmarks/p0-2026-09-26/sql-10000.json), [SQL 100k](benchmarks/p0-2026-09-26/sql-100000.json)
-- Implementation plan: [PERFORMANCE_PLAN.md](PERFORMANCE_PLAN.md)
+- Baseline: [baseline-2026-09-25](benchmarks/baseline-2026-09-25/)
+- P0 re-measure: [p0-2026-09-26](benchmarks/p0-2026-09-26/)
+- Post-pad verification: [final-2026-09-26](benchmarks/final-2026-09-26/) (metrics p95 5.56 s — superseded)
+- **Current metrics fix:** [metrics-fix-2026-09-26](benchmarks/metrics-fix-2026-09-26/)
+- Plan: [PERFORMANCE_PLAN.md](PERFORMANCE_PLAN.md)
 
-## Final delivery verification — 2026-09-26 UTC
+## Earlier final verification notes
 
-Final code fixes equivalent zero-fraction UTC timestamp comparisons at inclusive boundaries and preserves direct reviewer-helper scope. **152 tests pass**. The full local Chrome acceptance flow passes, including revisions/approval, permissions, safe rendering, stale-tab recovery, mobile overflow, pagination, detail return, filter/persona resets, and out-of-range recovery.
-
-[Final 100k HTTP results](benchmarks/final-2026-09-26/results-100000.json): 200 requests each at concurrency 10 give queue p95 **119.75 ms** and metrics p95 **5,556.62 ms**. Queue response is **27,505 bytes**, 50 rows, and [3 SELECTs](benchmarks/final-2026-09-26/sql-100000.json). Sampled peak server RSS is **125.4 MiB**. All 20 four-step lifecycles and the one-winner/19-conflict decision check pass; no unexpected phase errors or integrity failures. Lifecycle p95 is 4.00 s. Metrics and deep offsets remain known scale limits. Final timestamp normalization adds work; do not quote the earlier 3.74 s metrics timing as the final result.
-
-[Browser/network measurement](benchmarks/p0-2026-09-26/network-100000.json) on the P0 build **before the final timestamp correction** rendered 50 rows at 100k: cold unthrottled 907 ms, warm 168 ms, broadband 386 ms, mobile emulation 1,274 ms; about 0.09 MiB cold resource transfer and no timeouts. These are single exploratory visits, not percentiles. The corrected build passed functional browser checks; its network timing was not repeated. No sustained or public-host capacity claim is made.
-
-The harness's `metrics_aggregate` query-plan entry is a simplified count proxy, not the full metric query; use the actual SQL trace for investigation. Historical benchmark directories are preserved. Final environment/source hashes and integrity evidence are in [final-2026-09-26](benchmarks/final-2026-09-26/).
+[final-2026-09-26](benchmarks/final-2026-09-26/) recorded queue p95 **120 ms**, metrics p95 **5.56 s**, RSS **125.4 MiB**, and passing Chrome acceptance before the fast-path metrics change. Browser/network on the pre-pad P0 build: [network-100000.json](benchmarks/p0-2026-09-26/network-100000.json) (50 rows at 100k; exploratory single visits). Do not quote the 5.56 s metrics figure as current.

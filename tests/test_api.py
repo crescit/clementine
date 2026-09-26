@@ -108,6 +108,17 @@ def test_unknown_identity_401(seeded_client: TestClient) -> None:
     assert resp.json()["code"] == "UNAUTHENTICATED"
 
 
+def test_bearer_identity_accepted(seeded_client: TestClient) -> None:
+    """Production-shaped Authorization: Bearer uses the same user resolution."""
+    ids = _users(seeded_client)
+    resp = seeded_client.get(
+        "/api/submissions",
+        headers={"Authorization": f"Bearer {ids['reviewer_a']}"},
+    )
+    assert resp.status_code == 200
+    assert "submissions" in resp.json()
+
+
 def test_users_endpoint_lists_personas(seeded_client: TestClient) -> None:
     resp = seeded_client.get("/api/users")
     assert resp.status_code == 200
@@ -431,3 +442,81 @@ def test_reset_permission_disabled_mode_and_stale_ids(seeded_client, monkeypatch
         ).status_code
         == 404
     )
+
+
+def test_notifications_are_durable_and_role_scoped(seeded_client: TestClient) -> None:
+    ids = _users(seeded_client)
+    created = _create(
+        seeded_client,
+        ids["submitter"],
+        title="Notify Me Loan",
+        copy_text="Subject to credit approval. ClearPath may compensate this partner.",
+        channel="AFFILIATE",
+        partner="NotifyPartner",
+        product="PERSONAL_LOAN",
+    )
+    assignee = created["assigned_reviewer_id"]
+    assert assignee in {ids["reviewer_a"], ids["reviewer_b"]}
+
+    reviewer_feed = seeded_client.get(
+        "/api/notifications", headers=headers(assignee)
+    )
+    assert reviewer_feed.status_code == 200
+    reviewer_notes = reviewer_feed.json()["notifications"]
+    assert reviewer_feed.json()["unread_count"] >= 1
+    assert any(
+        n["submission_id"] == created["id"]
+        and n["event_type"] in {"AUTO_ASSIGNED", "ASSIGNED"}
+        and n["unread"]
+        for n in reviewer_notes
+    )
+
+    submitter_feed = seeded_client.get(
+        "/api/notifications", headers=headers(ids["submitter"])
+    )
+    assert submitter_feed.status_code == 200
+    assert any(
+        n["submission_id"] == created["id"] and n["unread"]
+        for n in submitter_feed.json()["notifications"]
+    )
+
+    other = ids["reviewer_b"] if assignee == ids["reviewer_a"] else ids["reviewer_a"]
+    other_feed = seeded_client.get("/api/notifications", headers=headers(other))
+    assert other_feed.status_code == 200
+    assert all(
+        n["submission_id"] != created["id"]
+        or n["event_type"] not in {"AUTO_ASSIGNED", "ASSIGNED"}
+        for n in other_feed.json()["notifications"]
+    )
+
+    target = next(n for n in reviewer_notes if n["submission_id"] == created["id"])
+    read = seeded_client.post(
+        f"/api/notifications/{target['id']}/read", headers=headers(assignee)
+    )
+    assert read.status_code == 200
+    assert read.json()["unread_count"] == reviewer_feed.json()["unread_count"] - 1
+
+    # Read state is server-side: a fresh GET still shows read_at set.
+    again = seeded_client.get("/api/notifications", headers=headers(assignee))
+    updated = next(n for n in again.json()["notifications"] if n["id"] == target["id"])
+    assert updated["unread"] is False
+    assert updated["read_at"]
+
+    # Mark-all clears remaining unread for this persona only.
+    assert (
+        seeded_client.post(
+            "/api/notifications/read-all", headers=headers(assignee)
+        ).status_code
+        == 200
+    )
+    cleared = seeded_client.get("/api/notifications", headers=headers(assignee))
+    assert cleared.json()["unread_count"] == 0
+    submitter_still = seeded_client.get(
+        "/api/notifications", headers=headers(ids["submitter"])
+    )
+    assert submitter_still.json()["unread_count"] >= 1
+
+
+def test_notifications_require_identity(seeded_client: TestClient) -> None:
+    assert seeded_client.get("/api/notifications").status_code == 401
+

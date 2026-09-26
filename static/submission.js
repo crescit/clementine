@@ -10,12 +10,20 @@ import {
   person,
   showError,
   notice,
+  clearNotice,
   busy
 } from './common.js';
 const params = new URLSearchParams(location.search),
   id = params.get('id');
 let context, record, history;
 const path = `/api/submissions/${encodeURIComponent(id || '')}`;
+const ACTION_SAVED = {
+  approve: 'Approved. Status and activity trail are updated on this record.',
+  'request-changes': 'Changes requested. The submitter can revise on this same record.',
+  reject: 'Rejected. The decision is recorded in the activity trail.',
+  assign: 'Assignment updated. The next owner is visible on this record.',
+  resubmit: 'Revision submitted. A new version is ready for review.'
+};
 
 function safeLink(url) {
   try {
@@ -28,12 +36,16 @@ function safeLink(url) {
 
 function showVersion() {
   const v = history.versions.find(v => v.version_number === Number($('version').value));
+  if (!v) {
+    $('copy').replaceChildren(document.createTextNode('This version is no longer available. Pick another version or return to the queue.'));
+    return;
+  }
   const current = v.version_number === record.current_version;
   $('version-meta').textContent = `${current?'Current version':'Historical version · read only'} · Submitted by ${person(context.users,v.created_by)} · ${date(v.created_at,true)}`;
   const points = Array.from(v.copy_text);
   $('copy').replaceChildren();
   const scan = v.preflight;
-  const spans = scan.findings.filter(f => f.start !== null).sort((a, b) => a.start - b.start);
+  const spans = scan.findings.filter(f => f.start != null && f.end != null).sort((a, b) => a.start - b.start);
   let position = 0;
   for (const f of spans) {
     if (f.start < position) continue;
@@ -104,14 +116,51 @@ async function render() {
     return item;
   }));
   const terminal = ['APPROVED', 'REJECTED'].includes(record.status);
-  $('next-action').textContent = terminal ? `${label(record.status)} · Version ${record.current_version} · ${date(record.decided_at,true)}. The decision and its author are recorded in the activity trail.` : record.status === 'CHANGES_REQUESTED' ? `Waiting for ${person(context.users,record.submitter_id)} to revise the copy and resubmit.` : record.assigned_reviewer_id ? `${person(context.users,record.assigned_reviewer_id)} owns the next review decision.` : 'Assign a reviewer to start the review.';
-  $('revision-panel').hidden = !record.allowed_actions.includes('RESUBMIT');
-  $('revision-copy').value = record.copy_text;
-  $('revision-url').value = record.asset_url || '';
+  const youReview = context.actor.id === record.assigned_reviewer_id;
+  const youSubmit = context.actor.id === record.submitter_id;
+  const waitingOnYou = !terminal && (
+    (record.status === 'CHANGES_REQUESTED' && youSubmit) ||
+    (record.status !== 'CHANGES_REQUESTED' && youReview && record.allowed_actions.includes('APPROVE')) ||
+    (!record.assigned_reviewer_id && record.allowed_actions.includes('ASSIGN'))
+  );
+  let nextCopy;
+  if (terminal) {
+    nextCopy = `${label(record.status)} · Version ${record.current_version} · ${date(record.decided_at,true)}. The decision and its author are recorded in the activity trail.`;
+  } else if (record.status === 'CHANGES_REQUESTED') {
+    nextCopy = youSubmit
+      ? `Edit the campaign copy on the left, then save to create version ${record.current_version + 1}.`
+      : `Waiting for ${person(context.users,record.submitter_id)} to revise the copy and resubmit.`;
+  } else if (record.assigned_reviewer_id) {
+    nextCopy = youReview
+      ? 'You own the next review decision.'
+      : `${person(context.users,record.assigned_reviewer_id)} owns the next review decision.`;
+  } else {
+    nextCopy = waitingOnYou
+      ? 'Assign a reviewer to start the review.'
+      : 'Waiting for a reviewer assignment.';
+  }
+  $('next-action').textContent = nextCopy;
+  $('next-action-panel').classList.toggle('your-turn', waitingOnYou);
+  const canResubmit = record.allowed_actions.includes('RESUBMIT');
+  $('copy-view').hidden = canResubmit;
+  $('revision-form').hidden = !canResubmit;
+  $('version-label').hidden = canResubmit;
+  $('copy-panel').classList.toggle('editing', canResubmit);
+  $('copy-heading').textContent = canResubmit ? 'Revise campaign copy' : 'Campaign copy';
+  if (canResubmit) {
+    $('version-meta').textContent = `Editing a new version from v${record.current_version} · address the feedback in the policy check, then save.`;
+    $('revision-hint').textContent = `Creates version ${record.current_version + 1} · 1–20,000 characters`;
+    $('revision-copy').value = record.copy_text;
+    $('revision-url').value = record.asset_url || '';
+  }
   $('assign-form').hidden = !record.allowed_actions.includes('ASSIGN');
   $('assign-reviewer').replaceChildren(...context.users.filter(u => u.role === 'REVIEWER').map(u => option(u.id, u.name)));
   $('assign-reviewer').value = record.assigned_reviewer_id || context.actor.id;
   $('assign-comment').required = !!record.assigned_reviewer_id;
+  return {
+    waitingOnYou,
+    nextCopy
+  };
 }
 async function mutate(action, body) {
   await api(`${path}/${action}`, {
@@ -124,15 +173,27 @@ async function mutate(action, body) {
   await render();
   $('decision-comment').value = '';
   $('assign-comment').value = '';
-  notice('Saved. The campaign and activity trail are up to date.');
+  notice(ACTION_SAVED[action] || 'Saved. The campaign and activity trail are up to date.');
 }
 async function load() {
   const query = sessionStorage.getItem('clearpath_queue_query') || '';
   $('back').href = '/static/index.html' + (query.startsWith('?') ? query : '');
   context = await init();
   if (!id) throw new Error('No campaign selected. Open a submission from the review queue.');
-  await render();
-  if (params.get('created') === 'true') notice('Submission received. Your campaign has been assigned for review.');
+  const state = await render();
+  if (params.get('created') === 'true') {
+    notice('Submission received. Status, owner, and revision stay on this record — no email chase.');
+    window.history.replaceState({}, '', `/static/submission.html?id=${encodeURIComponent(id)}`);
+  } else if (state.waitingOnYou) {
+    notice(state.nextCopy, false, {
+      sticky: true
+    });
+    const box = $('notice');
+    box.classList.add('attention');
+    box.classList.remove('toast', 'success');
+  } else {
+    clearNotice();
+  }
   $('decision-form').onsubmit = async (e) => {
     e.preventDefault();
     const action = e.submitter.value,
@@ -163,6 +224,10 @@ async function load() {
   };
 }
 load().catch(e => {
-  $('loading').textContent = 'This campaign could not be loaded. Return to the queue or reload to try again.';
+  const loading = $('loading');
+  if (loading) {
+    loading.hidden = false;
+    loading.textContent = 'This campaign could not be loaded. Return to the queue or reload to try again.';
+  }
   showError(e);
 });
