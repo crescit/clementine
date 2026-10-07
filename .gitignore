@@ -14,6 +14,11 @@ htmlcov/
 
 # Runtime / secrets
 .env
+.env.*
+!.env.example
+*.bak
+*.pem
+*.key
 data/
 *.db
 *.db-journal
@@ -36,3 +41,6 @@ docs/benchmarks/**/*.log
 
 # Worker scratch scripts
 /scratch*.py
+
+# Local tooling
+.claude/

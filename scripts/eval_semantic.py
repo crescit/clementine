@@ -58,6 +58,17 @@ class CaseOutcome:
 # --- Pure scoring -------------------------------------------------------------
 
 
+
+def _display_path(path) -> str:
+    """Repo-relative path for reports, so local absolute paths never land in output."""
+    from pathlib import Path as _P
+    p = _P(path).resolve()
+    repo = _P(__file__).resolve().parents[1]
+    try:
+        return str(p.relative_to(repo))
+    except ValueError:
+        return p.name
+
 def _ratio(num: int, den: int) -> float | None:
     """Precision/recall ratio, null when the denominator is zero."""
     if den <= 0:
@@ -264,7 +275,7 @@ def build_report(cases: list[dict], outcomes: list[CaseOutcome], snapshot: dict,
         "prompt_version": _prompt_version(),
         "provider_revision": provider_revision,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "case_set": {"path": str(cases_path), "hash": case_set_hash(cases_path)},
+        "case_set": {"path": _display_path(cases_path), "hash": case_set_hash(cases_path)},
         "snapshot": {"id": snapshot["id"], "version": snapshot["version"], "hash": snapshot["hash"]},
         "metrics": score_cases_by_split(outcomes),
         "cases": rows,

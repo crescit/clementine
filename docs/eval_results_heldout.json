@@ -4,7 +4,7 @@
   "provider_revision": "deepseek-v4-flash",
   "timestamp": "2026-10-07T20:34:45.833963+00:00",
   "case_set": {
-    "path": "/Users/josh/Documents/Projects/promptarmortakehome/eval/cases.json",
+    "path": "eval/cases.json",
     "hash": "561c5de053e3fdc1344fb68ef3323ad2b35b90155337481d4b45f9dfef6ff635"
   },
   "snapshot": {
