@@ -77,7 +77,7 @@ def test_v2_db_migrates_to_v3_policy_tables_without_wipe(temp_db: Path, frozen_n
 
     db.initialize_schema(conn := db.connect(temp_db))
     try:
-        assert db.get_user_version(conn) == 3
+        assert db.get_user_version(conn) == db.SCHEMA_USER_VERSION
         # Policy tables now exist.
         rows = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' "

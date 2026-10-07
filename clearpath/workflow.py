@@ -424,6 +424,15 @@ class PreflightBlockedError(DomainError):
         )
 
 
+class SemanticGateError(DomainError):
+    """Approval is blocked by the semantic-review gate."""
+
+    code = ErrorCode.SEMANTIC_GATE
+
+    def __init__(self, message, details=None):
+        super().__init__(message or "Approval blocked by the semantic review gate.", details)
+
+
 class DatabaseBusyError(DomainError):
     code = ErrorCode.DATABASE_BUSY
 
@@ -643,12 +652,36 @@ def _mutate(
         prior_copy=row["copy_text"],
         prior_asset_url=row["asset_url"],
     )
+    attribution = None
     if action == Action.APPROVE:
         preflight = run_preflight(
             Product(row["product"]), Channel(row["channel"]), row["copy_text"]
         )
         if not preflight["passed"]:
             raise PreflightBlockedError(preflight["findings"])
+        # --- S3 semantic gate (deterministic; never runs inference here) ---
+        import clearpath.policies as policies_mod
+        import clearpath.review as review_mod
+
+        snap_state = policies_mod.get_state(conn)
+        snapshot_id = snap_state.get("active_snapshot_id")
+        if snapshot_id:
+            snapshot = policies_mod.get_snapshot(conn, snap_state["active_version"])
+            blocking = review_mod.deterministic_findings(
+                snapshot["rules"], row["product"], row["channel"], row["copy_text"]
+            )
+            if blocking:
+                raise PreflightBlockedError(blocking)
+            if review_mod.semantic_mode_enabled():
+                ok, attribution, gate_error = review_mod.approval_gate(
+                    conn,
+                    sid,
+                    record.current_version,
+                    snapshot_id,
+                    record.assigned_reviewer_id,
+                )
+                if not ok:
+                    raise SemanticGateError(gate_error["message"], gate_error.get("details", {}))
     version = record.current_version + (action == Action.RESUBMIT)
     if action == Action.RESUBMIT:
         _version(conn, sid, version, actor.id, copy_text, asset_url, now)
@@ -674,6 +707,8 @@ def _mutate(
             "policy_version": POLICY_VERSION,
             "finding_ids": sorted({f["rule_id"] for f in observed["findings"]}),
         }
+        if attribution is not None:
+            metadata.update(attribution)
     decided = _iso(now) if action in (Action.APPROVE, Action.REJECT) else None
     conn.execute(
         """UPDATE submissions SET status = ?, assigned_reviewer_id = ?, current_version = ?,

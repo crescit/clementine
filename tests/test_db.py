@@ -373,7 +373,7 @@ def test_schema_v1_migrates_to_notifications(tmp_path: Path) -> None:
     conn = db.connect(path)
     try:
         assert db.initialize_schema(conn) is False
-        assert db.get_user_version(conn) == 3
+        assert db.get_user_version(conn) == db.SCHEMA_USER_VERSION
         assert "notifications" in {
             r["name"]
             for r in conn.execute(
