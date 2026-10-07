@@ -1,6 +1,6 @@
 # S2 — Genuine provider evidence (run 2026-10-06)
 
-- provider base_url: `http://localhost:8000/v1`
+- provider base_url: `<configured OpenAI-compatible endpoint>`
 - provider model_id: `deepseek-v4-flash`
 - api_key: present, value never printed/logged
 - result status: `SUCCESS`

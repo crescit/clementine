@@ -2,8 +2,7 @@
 
 Status: FROZEN baseline for the ClearPath semantic-review upgrade series.
 Revision: 2026-10-06-semantic-v1
-Plan: clearpath_semantic_upgrade_plan.md
-Workspace: .
+Plan: semantic upgrade plan (internal, not tracked)
 Card: S0 — Baseline and contracts
 Dependency: none (baseline established first)
 
@@ -20,16 +19,15 @@ cards (S1–S7) consume verified parent evidence instead of re-deriving it.
   test_pagination (8), test_performance_tools (2), test_preflight (13),
   test_transactions (4), test_workflow (79).
 - Board configuration inspected (board `clearpath`, kanban.db at
-  ~/.hermes/kanban/boards/clearpath/kanban.db): S-series cards S0..S7 created;
+  the local board database): S-series cards S0..S7 created;
   S0 running, S1..S7 todo with parent-dependency gating.
 - Coding agent verified as DeepSeek: task t_2610f00d carries
   `model_override=deepseek-v4-flash`, `provider_override=custom`, resolved to
-  the OpenAI-compatible endpoint http://localhost:8000/v1
-  which serves model id `deepseek-v4-flash`
-  Spark), `supported_in_api: true`. The runtime evaluator model is a separate
+  the OpenAI-compatible endpoint <private OpenAI-compatible endpoint>
+  which serves model id `deepseek-v4-flash`, `supported_in_api: true`. The runtime evaluator model is a separate
   configuration decision (see Inference contract below).
 - Runtime provider access confirmed WITHOUT printing secrets: TCP connect to
-  localhost:8000 succeeded; /v1/models returned HTTP 200
+  the endpoint succeeded; /v1/models returned HTTP 200
   listing `deepseek-v4-flash`. API key presence confirmed non-empty in
   the server .env (VLLM_API_KEY); the key value was never
   printed or logged.
@@ -114,7 +112,7 @@ end-exclusive Unicode code-point offsets; JS highlights via Array.from(copy)).
 
 ## Inference contract (for S2 runtime evaluator)
 
-Endpoint: http://localhost:8000/v1 (OpenAI-compatible chat).
+Endpoint: <private OpenAI-compatible endpoint> (OpenAI-compatible chat).
 Model id verified: `deepseek-v4-flash`,
 supported_in_api=true. Key source: the server .env
 (VLLM_API_KEY, non-empty; value never printed). Model-name swap works only

@@ -13,7 +13,7 @@ import os
 from clearpath import inference as inf
 from clearpath import semantic
 
-ENV_PATH = os.path.expanduser("the server .env")
+ENV_PATH = os.path.expanduser(os.environ.get("CLEARPATH_ENV_FILE", ".env"))
 
 
 def load_env(path: str) -> dict[str, str]:
@@ -31,12 +31,12 @@ def load_env(path: str) -> dict[str, str]:
 def main() -> None:
     env = load_env(ENV_PATH)
     # S0 contract verifies the runtime-evaluator endpoint and model id:
-    # http://localhost:8000/v1 serving deepseek-v4-flash.
+    # the configured OpenAI-compatible endpoint serving deepseek-v4-flash.
     # The .env MODEL_BASE_URL/SERVED_MODEL_NAME point at the coder model (port
     # 8100) which is NOT the runtime evaluator, so we pin the verified values.
-    base_url = "http://localhost:8000/v1"
+    base_url = os.environ.get("CLEARPATH_INFERENCE_BASE_URL", "http://localhost:8000/v1")
     model_id = "deepseek-v4-flash"
-    api_key = env.get("VLLM_API_KEY") or env.get("MODEL_SERVICE_API_KEY")
+    api_key = env.get("CLEARPATH_INFERENCE_API_KEY") or env.get("VLLM_API_KEY")
     assert api_key, "no inference key present"
 
     config = inf.ProviderConfig(
