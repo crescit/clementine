@@ -260,3 +260,23 @@ class RejectRequest(ExpectedRecordVersion):
         if not (COMMENT_MIN <= len(value) <= COMMENT_MAX):
             raise ValueError(f"comment must be {COMMENT_MIN}-{COMMENT_MAX} characters")
         return value
+
+
+# --- S1: policy administration -------------------------------------------------
+
+class DraftSaveRequest(BaseModel):
+    """Save a new mutable policy draft (optimistic concurrency)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rules: list[dict]
+    expected_draft_version: int | None = Field(default=None, ge=0)
+
+
+class PublishRequest(BaseModel):
+    """Publish the current draft as a new immutable snapshot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    expected_draft_version: int = Field(ge=0)
+    expected_active_version: int | None = Field(default=None, ge=1)

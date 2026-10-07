@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
+from pathlib import Path
+
 from clearpath import db
 
 # --- K0 smoke ------------------------------------------------------------------
@@ -519,4 +521,134 @@ def test_notifications_are_durable_and_role_scoped(seeded_client: TestClient) ->
 
 def test_notifications_require_identity(seeded_client: TestClient) -> None:
     assert seeded_client.get("/api/notifications").status_code == 401
+
+
+# --- S1: policy administration -------------------------------------------------
+
+def _policy_admin(seeded_client: TestClient, temp_db: Path) -> str:
+    """Return the seeded user holding the manage_policies capability."""
+    conn = db.connect(temp_db)
+    try:
+        row = conn.execute(
+            "SELECT user_id FROM permissions WHERE capability = 'manage_policies' LIMIT 1"
+        ).fetchone()
+        return str(row["user_id"]) if row else None
+    finally:
+        conn.close()
+
+
+def _submitter_id(seeded_client: TestClient, temp_db: Path) -> str:
+    """Return a seeded submitter id (no manage_policies)."""
+    conn = db.connect(temp_db)
+    try:
+        row = conn.execute(
+            "SELECT id FROM users WHERE role = 'SUBMITTER' LIMIT 1"
+        ).fetchone()
+        return str(row["id"]) if row else None
+    finally:
+        conn.close()
+
+
+def test_policies_require_identity(seeded_client: TestClient) -> None:
+    assert seeded_client.get("/api/policies").status_code == 401
+
+
+def test_policies_overview_as_admin(seeded_client: TestClient, temp_db: Path) -> None:
+    admin = _policy_admin(seeded_client, temp_db)
+    assert admin is not None
+    resp = seeded_client.get("/api/policies", headers={"X-Demo-User-Id": admin})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["state"]["active_version"] == 1
+    assert body["active"]["version"] == 1
+    assert len(body["draft"]) == 5
+
+
+def test_draft_save_denied_for_submitter(
+    seeded_client: TestClient, temp_db: Path,
+) -> None:
+    submitter = _submitter_id(seeded_client, temp_db)
+    resp = seeded_client.put(
+        "/api/policies/draft",
+        headers={"X-Demo-User-Id": submitter},
+        json={
+            "rules": [{"rule_key": "R1", "title": "T", "instructions": "I", "kind": "semantic", "enabled": 1}],
+            "expected_draft_version": 0,
+        },
+    )
+    assert resp.status_code == 403
+    assert resp.json()["code"] == "CAPABILITY_REQUIRED"
+
+
+def test_draft_save_and_publish_happy_path(
+    seeded_client: TestClient, temp_db: Path,
+) -> None:
+    admin = _policy_admin(seeded_client, temp_db)
+    assert admin is not None
+    h = {"X-Demo-User-Id": admin}
+    rules = [{"rule_key": "R1", "title": "T", "instructions": "I", "kind": "semantic", "enabled": 1}]
+
+    saved = seeded_client.put(
+        "/api/policies/draft", headers=h,
+        json={"rules": rules, "expected_draft_version": 0},
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["draft_version"] == 1
+
+    published = seeded_client.post(
+        "/api/policies/publish", headers=h,
+        json={"expected_draft_version": 1, "expected_active_version": 1},
+    )
+    assert published.status_code == 200, published.text
+    assert published.json()["version"] == 2
+
+    overview = seeded_client.get("/api/policies", headers=h).json()
+    assert overview["state"]["active_version"] == 2
+    assert overview["active"]["version"] == 2
+    assert [r["rule_key"] for r in overview["active"]["rules"]] == ["R1"]
+
+
+def test_publish_stale_draft_conflicts(
+    seeded_client: TestClient, temp_db: Path,
+) -> None:
+    admin = _policy_admin(seeded_client, temp_db)
+    assert admin is not None
+    h = {"X-Demo-User-Id": admin}
+    rules = [{"rule_key": "R1", "title": "T", "instructions": "I", "kind": "semantic", "enabled": 1}]
+
+    # Advance the draft, then publish once (active v1 -> v2).
+    seeded_client.put("/api/policies/draft", headers=h,
+                      json={"rules": rules, "expected_draft_version": 0})
+    first = seeded_client.post(
+        "/api/policies/publish", headers=h,
+        json={"expected_draft_version": 1, "expected_active_version": 1},
+    )
+    assert first.status_code == 200, first.text
+
+    # A second publish claiming active is still v1 must conflict (STALE_PUBLISH).
+    resp = seeded_client.post(
+        "/api/policies/publish", headers=h,
+        json={"expected_draft_version": 1, "expected_active_version": 1},
+    )
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["code"] == "STALE_PUBLISH"
+
+
+def test_snapshot_detail_and_audit(
+    seeded_client: TestClient, temp_db: Path,
+) -> None:
+    admin = _policy_admin(seeded_client, temp_db)
+    assert admin is not None
+    h = {"X-Demo-User-Id": admin}
+
+    detail = seeded_client.get("/api/policies/snapshots/1", headers=h)
+    assert detail.status_code == 200
+    assert detail.json()["version"] == 1
+
+    missing = seeded_client.get("/api/policies/snapshots/99", headers=h)
+    assert missing.status_code == 404
+
+    audit = seeded_client.get("/api/policies/audit", headers=h)
+    assert audit.status_code == 200
+    assert any(e["event_type"] == "PUBLISHED" and e["snapshot_version"] == 1 for e in audit.json()["events"])
 

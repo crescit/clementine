@@ -22,14 +22,16 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
-from clearpath import db, metrics as metrics_mod, notifications as notif_mod, seed, workflow
+from clearpath import db, metrics as metrics_mod, notifications as notif_mod, policies as policies_mod, seed, workflow
 from clearpath.identity import CallerId, resolve_actor
 from clearpath.preflight import run_preflight
 from clearpath.models import (
     ApproveRequest,
     AssignRequest,
+    DraftSaveRequest,
     ErrorCode,
     IntakeRequest,
+    PublishRequest,
     RejectRequest,
     RequestChangesRequest,
     ResubmitRequest,
@@ -74,6 +76,15 @@ def _error(
 def _map_domain_error(exc: Exception) -> JSONResponse:
     code = getattr(exc, "code", ErrorCode.INTERNAL_ERROR)
     status = _STATUS_BY_CODE.get(code, 500)
+    message = getattr(exc, "message", None) or str(exc)
+    details = getattr(exc, "details", None)
+    return _error(code, message, status, details)
+
+
+def _map_policy_error(exc: Exception) -> JSONResponse:
+    """Map a policies.PolicyError to its own HTTP status (e.g. 401/403/409/400)."""
+    code = getattr(exc, "code", ErrorCode.INTERNAL_ERROR)
+    status = getattr(exc, "status", 500)
     message = getattr(exc, "message", None) or str(exc)
     details = getattr(exc, "details", None)
     return _error(code, message, status, details)
@@ -661,6 +672,123 @@ def create_app() -> FastAPI:
             except workflow.DomainError as exc:
                 return _map_domain_error(exc)
             return result
+        finally:
+            conn.close()
+
+    # --- S1: policy administration --------------------------------------------
+    @application.get("/api/policies")
+    def get_policies(
+        caller_id: CallerId,
+    ):
+        """Active publication, mutable draft, and state (any authenticated user)."""
+        conn = db.connect()
+        try:
+            resolve_actor(conn, caller_id)
+            state = policies_mod.get_state(conn)
+            active = policies_mod.get_snapshot(conn, state["active_version"]) if state["active_version"] is not None else None
+            return {
+                "state": state,
+                "active": active,
+                "draft": policies_mod.get_draft(conn),
+            }
+        finally:
+            conn.close()
+
+    @application.put("/api/policies/draft")
+    def save_policy_draft(
+        payload: DraftSaveRequest,
+        caller_id: CallerId,
+    ):
+        """Save a new mutable draft. Requires manage_policies (403 otherwise)."""
+        conn = db.connect()
+        try:
+            actor_row = resolve_actor(conn, caller_id)
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                result = policies_mod.save_draft(
+                    conn,
+                    actor_row["id"],
+                    payload.rules,
+                    expected_draft_version=payload.expected_draft_version,
+                    now=_now().isoformat().replace("+00:00", "Z"),
+                )
+                conn.execute("COMMIT")
+            except policies_mod.PolicyError as exc:
+                conn.execute("ROLLBACK")
+                return _map_policy_error(exc)
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+            return result
+        finally:
+            conn.close()
+
+    @application.post("/api/policies/publish")
+    def publish_policy(
+        payload: PublishRequest,
+        caller_id: CallerId,
+    ):
+        """Publish the current draft as a new immutable snapshot (requires manage_policies)."""
+        conn = db.connect()
+        try:
+            actor_row = resolve_actor(conn, caller_id)
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                result = policies_mod.publish_draft(
+                    conn,
+                    actor_row["id"],
+                    expected_draft_version=payload.expected_draft_version,
+                    expected_active_version=payload.expected_active_version,
+                    now=_now().isoformat().replace("+00:00", "Z"),
+                )
+                conn.execute("COMMIT")
+            except policies_mod.PolicyError as exc:
+                conn.execute("ROLLBACK")
+                return _map_policy_error(exc)
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+            return result
+        finally:
+            conn.close()
+
+    @application.get("/api/policies/snapshots")
+    def list_policy_snapshots(
+        caller_id: CallerId,
+    ):
+        """Immutable publication history (any authenticated user)."""
+        conn = db.connect()
+        try:
+            resolve_actor(conn, caller_id)
+            return {"snapshots": policies_mod.list_snapshots(conn)}
+        finally:
+            conn.close()
+
+    @application.get("/api/policies/snapshots/{version}")
+    def get_policy_snapshot(
+        version: int,
+        caller_id: CallerId,
+    ):
+        """One immutable snapshot with its rule set."""
+        conn = db.connect()
+        try:
+            resolve_actor(conn, caller_id)
+            snap = policies_mod.get_snapshot(conn, version)
+            if snap is None:
+                return _error(ErrorCode.NOT_FOUND, "Policy snapshot not found", 404)
+            return snap
+        finally:
+            conn.close()
+
+    @application.get("/api/policies/audit")
+    def list_policy_audit(
+        caller_id: CallerId,
+    ):
+        """Policy event trail (draft save / publish), newest first."""
+        conn = db.connect()
+        try:
+            resolve_actor(conn, caller_id)
+            return {"events": policies_mod.audit_trail(conn)}
         finally:
             conn.close()
 
