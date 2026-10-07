@@ -138,3 +138,28 @@ fetches; duplicate/in-flight requests capped.
 - S6 extends those cases to >=30 and runs the deterministic-vs-hybrid harness.
 - Any scope reduction must be explicit and must not remove validation,
   permission checks, auditability, failure handling, or required tests.
+
+## Intentional extensions (semantic upgrade)
+
+The S-series semantic upgrade adds the following contracts ON TOP of the frozen
+baseline above. None of them remove or weaken any baseline route, schema table,
+or approval behaviour; when `CLEARPATH_SEMANTIC_MODE=false` every baseline
+route/behaviour behaves exactly as frozen.
+
+Routes added:
+- `/api/policies*` — policy admin (list, get, save/draft, publish).
+- `/api/submissions/{id}/analyze` — run a semantic analysis of the current copy.
+- `/api/submissions/{id}/dispositions` — record a reviewer disposition on a finding.
+- `/api/submissions/{id}/exceptions` — record a manual exception and review by hand.
+
+Schema v4 tables added (in addition to the frozen v2 tables):
+- `analysis_runs`, `finding_dispositions`, `manual_exceptions`, and the policy tables.
+
+Submission detail extension:
+- `GET /api/submissions/{id}` now also carries a `review` object
+  (`enabled`, `run`, `findings` with disposition, `stale`, `approvable`,
+  `error`, `exception`, `policy`, `history`), derived from `review.approval_gate`.
+
+Approval gate:
+- When `CLEARPATH_SEMANTIC_MODE=true`, approval is additionally gated by
+  `review.approval_gate` on top of the baseline approval contract.

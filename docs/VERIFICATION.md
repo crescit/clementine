@@ -99,3 +99,14 @@ See [Performance baseline and implementation handoff](PERFORMANCE.md) for 1k/10k
 - Final synthetic performance evidence and remaining limits: [PERFORMANCE.md](PERFORMANCE.md). Real team productivity is a pilot hypothesis, not a benchmark claim.
 - Take-home scope is complete: all three products, affiliate intake, routing, prioritized review, revision loops, human decisions, audit history and operational metrics. Excel/email describe the replaced process; import/export and real notifications are documented future work.
 - Production identity, persistent hosting storage, legal policy coverage, and sustained capacity remain explicitly outside this demo's guarantees.
+
+## Semantic upgrade regression — 2026-10-07 (Pacific)
+
+Semantic-upgrade regression on the full hermetic suite after the timeout-default
+fix and contract-extension documentation:
+
+| Check | Command / step | Result | Date |
+|---|---|---|---|
+| Full suite | `.venv/bin/python -m pytest -q -p no:warnings tests` | pass — 225 passed (0 failures) | 2026-10-07 |
+| Inference timeout default | `clearpath/inference.py` `DEFAULT_TIMEOUT_S` | raised 60 → 150; `.env.example` `CLEARPATH_INFERENCE_TIMEOUT_S=150`; front-end analyze timeout (static/submission.js, 180000 ms) stays above it | 2026-10-07 |
+| Baseline contract extensions | `docs/S0_baseline_contracts.md` | "Intentional extensions (semantic upgrade)" section records new routes, v4 tables, detail.review, approval gate; baseline unchanged when semantic mode is off | 2026-10-07 |
