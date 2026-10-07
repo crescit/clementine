@@ -74,6 +74,11 @@ class ErrorCode:
     VERSION_CONFLICT = "VERSION_CONFLICT"
     DATABASE_BUSY = "DATABASE_BUSY"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+    SEMANTIC_GATE = "SEMANTIC_GATE"
+    STALE_RUN = "STALE_RUN"
+    NOT_ASSIGNED = "NOT_ASSIGNED"
+    INVALID_DISPOSITION = "INVALID_DISPOSITION"
+    INVALID_EXCEPTION = "INVALID_EXCEPTION"
 
 
 # --- Validation limits (§9) --------------------------------------------------
@@ -280,3 +285,47 @@ class PublishRequest(BaseModel):
 
     expected_draft_version: int = Field(ge=0)
     expected_active_version: int | None = Field(default=None, ge=1)
+
+
+class DispositionRequest(BaseModel):
+    """Record one reviewer disposition for a semantic finding."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    finding_id: str
+    disposition: str
+    reason: str
+
+    @field_validator("disposition")
+    @classmethod
+    def _valid_disposition(cls, v: str) -> str:
+        v = v.strip().upper()
+        if v not in ("ACKNOWLEDGED", "DISMISSED"):
+            raise ValueError("disposition must be ACKNOWLEDGED or DISMISSED")
+        return v
+
+    @field_validator("reason")
+    @classmethod
+    def _valid_reason(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("reason is required")
+        return v
+
+
+class ExceptionRequest(BaseModel):
+    """Record an explicit manual-review exception for a failed analysis."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _valid_reason(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("reason is required")
+        return v

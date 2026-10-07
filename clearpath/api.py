@@ -22,14 +22,16 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
-from clearpath import db, metrics as metrics_mod, notifications as notif_mod, policies as policies_mod, seed, workflow
+from clearpath import db, metrics as metrics_mod, notifications as notif_mod, policies as policies_mod, review as review_mod, seed, workflow
 from clearpath.identity import CallerId, resolve_actor
 from clearpath.preflight import run_preflight
 from clearpath.models import (
     ApproveRequest,
     AssignRequest,
+    DispositionRequest,
     DraftSaveRequest,
     ErrorCode,
+    ExceptionRequest,
     IntakeRequest,
     PublishRequest,
     RejectRequest,
@@ -83,6 +85,15 @@ def _map_domain_error(exc: Exception) -> JSONResponse:
 
 def _map_policy_error(exc: Exception) -> JSONResponse:
     """Map a policies.PolicyError to its own HTTP status (e.g. 401/403/409/400)."""
+    code = getattr(exc, "code", ErrorCode.INTERNAL_ERROR)
+    status = getattr(exc, "status", 500)
+    message = getattr(exc, "message", None) or str(exc)
+    details = getattr(exc, "details", None)
+    return _error(code, message, status, details)
+
+
+def _map_review_error(exc: Exception) -> JSONResponse:
+    """Map a review.ReviewError to its own HTTP status (e.g. 401/403/409/400)."""
     code = getattr(exc, "code", ErrorCode.INTERNAL_ERROR)
     status = getattr(exc, "status", 500)
     message = getattr(exc, "message", None) or str(exc)
@@ -789,6 +800,72 @@ def create_app() -> FastAPI:
         try:
             resolve_actor(conn, caller_id)
             return {"events": policies_mod.audit_trail(conn)}
+        finally:
+            conn.close()
+
+    # --- S3: persisted review and approval -------------------------------------
+    @application.post("/api/submissions/{submission_id}/analyze")
+    def analyze_submission(
+        submission_id: str,
+        caller_id: CallerId,
+    ):
+        conn = db.connect()
+        try:
+            actor_row = resolve_actor(conn, caller_id)
+            db_path = db.get_database_path()
+            return review_mod.analyze_submission(
+                db_path, submission_id, actor_row["id"], _now()
+            )
+        except review_mod.ReviewError as exc:
+            return _map_review_error(exc)
+        finally:
+            conn.close()
+
+    @application.post("/api/submissions/{submission_id}/dispositions")
+    def disposition_finding(
+        submission_id: str,
+        payload: DispositionRequest,
+        caller_id: CallerId,
+    ):
+        conn = db.connect()
+        try:
+            actor_row = resolve_actor(conn, caller_id)
+            db_path = db.get_database_path()
+            return review_mod.disposition_finding(
+                db_path,
+                submission_id,
+                payload.run_id,
+                payload.finding_id,
+                payload.disposition,
+                payload.reason,
+                actor_row["id"],
+                _now(),
+            )
+        except review_mod.ReviewError as exc:
+            return _map_review_error(exc)
+        finally:
+            conn.close()
+
+    @application.post("/api/submissions/{submission_id}/exceptions")
+    def exception_submission(
+        submission_id: str,
+        payload: ExceptionRequest,
+        caller_id: CallerId,
+    ):
+        conn = db.connect()
+        try:
+            actor_row = resolve_actor(conn, caller_id)
+            db_path = db.get_database_path()
+            return review_mod.exception_submission(
+                db_path,
+                submission_id,
+                payload.run_id,
+                payload.reason,
+                actor_row["id"],
+                _now(),
+            )
+        except review_mod.ReviewError as exc:
+            return _map_review_error(exc)
         finally:
             conn.close()
 
