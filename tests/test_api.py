@@ -580,6 +580,42 @@ def test_draft_save_denied_for_submitter(
     assert resp.json()["code"] == "CAPABILITY_REQUIRED"
 
 
+def test_draft_save_invalid_rules_rejected(
+    seeded_client: TestClient, temp_db: Path,
+) -> None:
+    admin = _policy_admin(seeded_client, temp_db)
+    assert admin is not None
+    resp = seeded_client.put(
+        "/api/policies/draft",
+        headers={"X-Demo-User-Id": admin},
+        json={
+            "rules": [{"rule_key": "R1", "title": "T", "instructions": "I", "kind": "unknown_kind", "enabled": 1}],
+            "expected_draft_version": 0,
+        },
+    )
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["code"] == "INVALID_RULE"
+
+
+def test_draft_save_stale_version_conflicts(
+    seeded_client: TestClient, temp_db: Path,
+) -> None:
+    admin = _policy_admin(seeded_client, temp_db)
+    assert admin is not None
+    h = {"X-Demo-User-Id": admin}
+    rules = [{"rule_key": "R1", "title": "T", "instructions": "I", "kind": "semantic", "enabled": 1}]
+
+    # Advance the draft once (draft v0 -> v1), then save claiming v0 -> stale.
+    seeded_client.put("/api/policies/draft", headers=h,
+                      json={"rules": rules, "expected_draft_version": 0})
+    stale = seeded_client.put(
+        "/api/policies/draft", headers=h,
+        json={"rules": rules, "expected_draft_version": 0},
+    )
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["code"] == "STALE_DRAFT"
+
+
 def test_draft_save_and_publish_happy_path(
     seeded_client: TestClient, temp_db: Path,
 ) -> None:
