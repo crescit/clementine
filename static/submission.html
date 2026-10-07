@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Review workspace · ClearPath</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/styles.css">
+<link rel="stylesheet" href="/static/styles.css?v=20261013">
 </head>
 <body><a class="skip-link" href="#main">Skip to content</a>
 <header class="app-header"><a class="brand" href="/"><span class="brand-icon" aria-hidden="true">C<span>↗</span></span>ClearPath<span class="brand-product">Compliance</span></a>
@@ -50,6 +50,21 @@
 </form>
 </div>
 </section>
+<section class="panel" id="semantic-panel" hidden>
+<div class="panel-heading">
+<div><p class="eyebrow">SEMANTIC REVIEW · MODEL-ASSISTED</p><h2 id="semantic-title">Semantic review</h2>
+</div>
+</div>
+<div class="panel-body"><div id="analyze-progress" class="progress-row" hidden><span class="spinner" aria-hidden="true"></span><span id="analyze-elapsed" class="small"></span><div class="progress-bar" aria-hidden="true"><span></span></div></div><p id="semantic-summary" role="status"></p><p id="semantic-policy" class="small"></p>
+<button id="analyze" type="button" hidden>Analyze current version</button>
+<div id="semantic-findings">
+</div>
+<form id="exception-form" class="form-stack" hidden><label>Manual review exception <span class="small">Required reason · recorded in the audit trail</span><textarea id="exception-reason" rows="2" maxlength="2000" required></textarea></label><button type="submit">Record exception and review manually</button>
+</form>
+<details id="semantic-history" hidden><summary class="small">Analysis history</summary><ol id="semantic-runs" class="timeline"></ol>
+</details><p class="small">Model findings are advisory evidence. The assigned reviewer records every disposition and the final decision.</p>
+</div>
+</section>
 <section class="panel">
 <div class="panel-heading">
 <div><p class="eyebrow">AUDIT TRAIL</p><h2>Activity & decisions</h2>
@@ -60,6 +75,16 @@
 </section>
 </div>
 <aside class="review-sidebar">
+<section class="panel policy-check" id="policy-check">
+<div class="panel-heading">
+<div><p class="eyebrow">POLICY CHECK</p><h2 id="preflight-title">Preflight</h2>
+</div>
+</div>
+<div class="panel-body"><p id="preflight-summary"></p>
+<div id="findings">
+</div><p class="small">Deterministic checks against ClearPath policies. A passing check still requires a reviewer’s decision.</p>
+</div>
+</section>
 <section id="next-action-panel" class="panel">
 <div class="panel-heading"><h2>Next action</h2>
 </div>
@@ -72,38 +97,13 @@
 </form>
 </div>
 </section>
-<section class="panel" id="semantic-panel" hidden>
-<div class="panel-heading">
-<div><p class="eyebrow">SEMANTIC REVIEW · MODEL-ASSISTED</p><h2 id="semantic-title">Semantic review</h2>
-</div>
-</div>
-<div class="panel-body"><p id="semantic-summary" role="status"></p><p id="semantic-policy" class="small"></p>
-<button id="analyze" type="button" hidden>Analyze current version</button>
-<div id="semantic-findings">
-</div>
-<form id="exception-form" class="form-stack" hidden><label>Manual review exception <span class="small">Required reason · recorded in the audit trail</span><textarea id="exception-reason" rows="2" maxlength="2000" required></textarea></label><button type="submit">Record exception and review manually</button>
-</form>
-<details id="semantic-history" hidden><summary class="small">Analysis history</summary><ol id="semantic-runs" class="timeline"></ol>
-</details><p class="small">Model findings are advisory evidence. The assigned reviewer records every disposition and the final decision.</p>
-</div>
-</section>
-<section class="panel">
-<div class="panel-heading">
-<div><p class="eyebrow">DEMO POLICY CHECK</p><h2 id="preflight-title">Preflight</h2>
-</div>
-</div>
-<div class="panel-body"><p id="preflight-summary"></p>
-<div id="findings">
-</div><p class="small">Deterministic checks against fictional ClearPath policies. A passing check still requires a reviewer’s decision.</p>
-</div>
-</section>
 </aside>
 </div>
 </div>
 </main>
-<footer class="app-footer"><span>ClearPath Financial · Internal marketing review</span><span>Fictional demo policies · Human review required</span>
+<footer class="app-footer"><span>ClearPath Financial · Internal marketing review</span><span>Human review required</span>
 </footer>
-<script type="module" src="/static/submission.js">
+<script type="module" src="/static/submission.js?v=20261013">
 </script>
 </body>
 </html>

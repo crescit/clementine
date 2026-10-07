@@ -41,18 +41,24 @@ function showReview(current) {
   $('analyze').hidden = !(isReviewer && open && current && pol);
   $('analyze').textContent = run ? 'Re-run analysis' : 'Analyze current version';
   let title, summary, cls;
-  if (!run) {
+  if (!run && rv.auto_pending) {
+    [title, summary, cls] = ['Analyzing…', 'Checking this copy against the semantic rules. This usually takes 15–60 seconds; the page updates when it finishes.', 'muted'];
+  } else if (!run) {
     [title, summary, cls] = ['Not analyzed', isReviewer ? 'Run an analysis of the current copy before approving.' : 'Waiting for the assigned reviewer to analyze this version.', 'muted'];
   } else if (rv.stale) {
     [title, summary, cls] = ['Analysis is stale', rv.error, 'check-blocked'];
   } else if (run.status !== 'SUCCESS') {
     [title, summary, cls] = ['Analysis failed', rv.exception ? `Manual exception recorded by ${person(context.users, rv.exception.actor_id)}: ${rv.exception.reason}` : 'The model call failed. Re-run, or record a manual exception and review by hand.', 'check-blocked'];
   } else if (!run.findings.length) {
-    [title, summary, cls] = ['No semantic findings', '✓ No implied approval promises found in this version.', 'check-passed'];
+    [title, summary, cls] = ['No semantic findings', '✓ No semantic policy findings in this version.', 'check-passed'];
   } else {
     const pending = run.findings.filter(f => !f.disposition).length;
     [title, summary, cls] = [`${run.findings.length} semantic finding${run.findings.length === 1 ? '' : 's'}`, pending ? `! ${pending} awaiting a reviewer disposition` : '✓ Every finding has a disposition', pending ? 'check-blocked' : 'check-passed'];
   }
+  const analyzing = !run && !!rv.auto_pending;
+  $('semantic-panel').classList.toggle('is-analyzing', analyzing);
+  $('analyze-progress').hidden = !analyzing;
+  tickElapsed(analyzing ? rv.auto_started_at : null);
   $('semantic-title').textContent = title;
   $('semantic-summary').className = cls;
   $('semantic-summary').textContent = summary;
@@ -139,7 +145,8 @@ function showVersion() {
     a.rel = 'noopener noreferrer';
     $('asset').append(a);
   }
-  $('preflight-title').textContent = scan.passed ? 'Checks passed' : `${scan.findings.length} blocking findings`;
+  $('preflight-title').textContent = scan.passed ? 'Checks passed' : `${scan.findings.length} blocking ${scan.findings.length === 1 ? 'finding' : 'findings'}`;
+  $('policy-check').classList.toggle('policy-check-blocked', !scan.passed);
   $('preflight-summary').className = scan.passed ? 'check-passed' : 'check-blocked';
   $('preflight-summary').textContent = scan.passed ? (current ? (['APPROVED','REJECTED'].includes(record.status) ? '✓ Policy checks passed for this version' : '✓ Ready for a human review') : '✓ Historical version · checks passed') : `! Changes needed in Version ${v.version_number}`;
   $('findings').replaceChildren(...scan.findings.map(f => {
@@ -155,6 +162,32 @@ function showVersion() {
   $('approve').disabled = !current || !record.preflight.passed || semanticBlocked;
   $('approve-hint').textContent = !current ? 'Select the current version to make a decision.' : !record.preflight.passed ? 'Approval is blocked until the findings above are resolved.' : semanticBlocked ? `Approval is blocked by semantic review: ${record.review.error}` : 'Approves the exact current copy shown here.';
   showReview(current);
+  watchAutoAnalysis();
+}
+let pollTimer, elapsedTimer;
+function tickElapsed(startedAt) {
+  clearInterval(elapsedTimer);
+  if (!startedAt) return;
+  const start = Date.parse(startedAt);
+  const paint = () => {
+    const sec = Math.max(0, Math.round((Date.now() - start) / 1000));
+    $('analyze-elapsed').textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} elapsed`;
+  };
+  paint();
+  elapsedTimer = setInterval(paint, 1000);
+}
+
+function watchAutoAnalysis() {
+  clearTimeout(pollTimer);
+  if (!(record.review && record.review.auto_pending)) return;
+  // Cheap poll; re-render only once the automatic run has finished.
+  pollTimer = setTimeout(async () => {
+    try {
+      const latest = await api(path);
+      if (latest.review && latest.review.auto_pending) watchAutoAnalysis();
+      else await render();
+    } catch (e) { watchAutoAnalysis(); }
+  }, 3000);
 }
 async function render() {
   [record, history] = await Promise.all([api(path), api(`${path}/history`)]);

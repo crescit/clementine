@@ -126,9 +126,10 @@ export async function init() {
   select.setAttribute('aria-label', 'Switch demo user');
   users.forEach(u => {
     const title = u.display_title || label(u.role);
+    const adminNote = u.can_manage_policies ? ' · Policy admin' : '';
     // Closed control stays short (name only); title is available on hover.
     const opt = option(u.id, u.name);
-    opt.title = `${u.name} · ${title}`;
+    opt.title = `${u.name} · ${title}${adminNote}`;
     select.append(opt);
   });
   select.value = actor.id;
@@ -145,7 +146,7 @@ export async function init() {
   };
   const initials = actor.name.split(/\s+/).filter(Boolean).map(n => n[0]).join('').slice(0, 2);
   const roleKey = String(actor.role || '').toLowerCase();
-  const roleLabel = label(actor.role);
+  const roleLabel = actor.can_manage_policies ? 'Policy admin' : label(actor.role);
   const title = actor.display_title || roleLabel;
   const avatar = el('span', initials, `avatar role-${roleKey}`);
   avatar.setAttribute('aria-hidden', 'true');

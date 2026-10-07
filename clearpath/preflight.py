@@ -40,7 +40,7 @@ _RULES: list[tuple[str, set[Product] | None, set[Channel] | None, str, str]] = [
         None,
         None,
         "Restricted approval claim",
-        "Demo policy requires pre-qualified; confirm offer accuracy.",
+        "Policy requires pre-qualified; confirm offer accuracy.",
     ),
     (
         "CLAIM_002",
@@ -54,21 +54,21 @@ _RULES: list[tuple[str, set[Product] | None, set[Channel] | None, str, str]] = [
         {Product.PERSONAL_LOAN, Product.CREDIT_CARD},
         None,
         "Missing credit approval disclosure",
-        "Add the exact demo disclosure: Subject to credit approval.",
+        "Add the exact disclosure: Subject to credit approval.",
     ),
     (
         "DISC_002",
         {Product.MORTGAGE_PREQUALIFICATION},
         None,
         "Missing mortgage prequalification disclosure",
-        "Add the exact demo disclosure: Prequalification is not a commitment to lend.",
+        "Add the exact disclosure: Prequalification is not a commitment to lend.",
     ),
     (
         "DISC_003",
         None,
         {Channel.AFFILIATE},
         "Missing partner disclosure",
-        "Add the exact demo partner disclosure: ClearPath may compensate this partner.",
+        "Add the exact partner disclosure: ClearPath may compensate this partner.",
     ),
 ]
 

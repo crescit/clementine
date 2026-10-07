@@ -131,6 +131,12 @@ def test_users_endpoint_lists_personas(seeded_client: TestClient) -> None:
     assert all(u["display_title"] for u in users)
 
 
+def test_users_endpoint_flags_policy_admins(seeded_client: TestClient) -> None:
+    users = seeded_client.get("/api/users").json()["users"]
+    admins = {u["name"] for u in users if u["can_manage_policies"]}
+    assert admins == {"Sarah T."}
+
+
 # Integration tests exercise the real database, automatic assignment, and API.
 def headers(uid):
     return {"X-Demo-User-Id": uid}
@@ -702,3 +708,10 @@ def test_submission_page_has_semantic_review_panel(client: TestClient) -> None:
     js = client.get("/static/submission.js").text
     for route in ("analyze", "dispositions", "exceptions"):
         assert f"{route}:" in js
+
+
+def test_static_assets_must_revalidate(client):
+    response = client.get("/static/submission.js")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers.get("etag")

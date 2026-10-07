@@ -8,8 +8,7 @@ import {
   date,
   person,
   showError,
-  notice,
-  busy
+  notice
 } from './common.js';
 
 const PRODUCTS = ['PERSONAL_LOAN', 'CREDIT_CARD', 'MORTGAGE_PREQUALIFICATION'];
@@ -18,118 +17,120 @@ const KINDS = [
   ['semantic', 'Semantic review'],
   ['required_disclosure', 'Required disclosure']
 ];
+const GROUPS = [
+  ['semantic', 'Semantic rules'],
+  ['required_disclosure', 'Required disclosures']
+];
 
 let context, policies, snapshots, events, canManage = false;
+let rules = [];      // working copy being edited
+let saved = '[]';    // serialized server draft, for change detection
+let selected = 0;
 
-function scopeOptions(currentProduct, currentChannel) {
-  const productSel = el('select');
-  productSel.name = 'product';
-  productSel.append(option('', 'All products'));
-  PRODUCTS.forEach(p => productSel.append(option(p, label(p))));
-  if (currentProduct) productSel.value = currentProduct;
+const clean = (r) => {
+  const rule = {
+    rule_key: (r.rule_key || '').trim(),
+    title: (r.title || '').trim(),
+    kind: r.kind,
+    required_literal: r.kind === 'required_disclosure' ? ((r.required_literal || '').trim() || null) : null,
+    product: r.product || null,
+    channel: r.channel || null,
+    enabled: r.enabled ? 1 : 0
+  };
+  const instructions = (r.instructions || '').trim();
+  if (instructions) rule.instructions = instructions;
+  return rule;
+};
+const serialize = () => JSON.stringify(rules.map(clean));
+const dirty = () => serialize() !== saved;
 
-  const channelSel = el('select');
-  channelSel.name = 'channel';
-  channelSel.append(option('', 'All channels'));
-  CHANNELS.forEach(c => channelSel.append(option(c, label(c))));
-  if (currentChannel) channelSel.value = currentChannel;
+const scopeText = (r) =>
+  `${r.product ? label(r.product) : 'All products'} · ${r.channel ? label(r.channel) : 'All channels'}`;
 
-  const wrapper = el('div', null, 'form-grid');
-  const productLabel = el('label');
-  productLabel.append(el('span', 'Product scope', 'small'), productSel);
-  const channelLabel = el('label');
-  channelLabel.append(el('span', 'Channel scope', 'small'), channelSel);
-  wrapper.append(productLabel, channelLabel);
-  return wrapper;
+function fillSelect(select, items, blank) {
+  select.replaceChildren();
+  if (blank) select.append(option('', blank));
+  items.forEach(([v, t]) => select.append(option(v, t)));
 }
 
-function literalField(requiredLiteral, kind) {
-  const labelNode = el('label');
-  labelNode.append(el('span', 'Required disclosure literal', 'small'));
-  const input = el('input');
-  input.name = 'required_literal';
-  input.type = 'text';
-  input.maxLength = 500;
-  input.placeholder = 'Exact text the copy must contain verbatim';
-  if (requiredLiteral) input.value = requiredLiteral;
-  labelNode.append(input);
-  labelNode.hidden = kind !== 'required_disclosure';
-  return labelNode;
-}
-
-function ruleRow(rule) {
-  const row = el('div', null, 'policy-rule');
-  const grid = el('div', null, 'form-grid');
-
-  const keyLabel = el('label');
-  keyLabel.append(el('span', 'Rule ID', 'small'), (() => {
-    const i = el('input');
-    i.name = 'rule_key';
-    i.required = true;
-    i.maxLength = 32;
-    i.value = rule.rule_key;
-    return i;
-  })());
-
-  const titleLabel = el('label');
-  titleLabel.append(el('span', 'Title', 'small'), (() => {
-    const i = el('input');
-    i.name = 'title';
-    i.required = true;
-    i.maxLength = 120;
-    i.value = rule.title;
-    return i;
-  })());
-
-  const kindLabel = el('label');
-  kindLabel.append(el('span', 'Kind', 'small'), (() => {
-    const s = el('select');
-    s.name = 'kind';
-    s.required = true;
-    KINDS.forEach(([v, t]) => s.append(option(v, t)));
-    s.value = rule.kind;
-    return s;
-  })());
-
-  grid.append(keyLabel, titleLabel, kindLabel);
-
-  const instrLabel = el('label');
-  instrLabel.append(el('span', 'Instructions', 'small'));
-  const ta = el('textarea');
-  ta.name = 'instructions';
-  ta.maxLength = 2000;
-  ta.rows = 3;
-  ta.placeholder = 'What the semantic reviewer should look for and why';
-  ta.value = rule.instructions || '';
-  instrLabel.append(ta);
-
-  const enabledLabel = el('label', null, 'check-row');
-  enabledLabel.append(el('span', 'Enabled', 'small'));
-  const en = el('input');
-  en.name = 'enabled';
-  en.type = 'checkbox';
-  en.checked = !!rule.enabled;
-  enabledLabel.append(en);
-
-  const scope = scopeOptions(rule.product, rule.channel);
-  const literal = literalField(rule.required_literal, rule.kind);
-
-  const remove = el('button', 'Remove rule', 'danger quiet');
-  remove.type = 'button';
-  remove.onclick = () => row.remove();
-
-  row.append(grid, instrLabel, enabledLabel, scope, literal, remove);
-  return row;
-}
-
-function renderRules() {
+function renderList() {
   const list = $('rule-list');
   list.replaceChildren();
-  (policies.draft || []).forEach(r => list.append(ruleRow(r)));
-  if (!canManage) {
-    list.querySelectorAll('input,select,textarea,button').forEach(c => c.disabled = true);
-    $('add-rule').hidden = true;
-  }
+  GROUPS.forEach(([kind, heading]) => {
+    const members = rules.map((r, i) => [r, i]).filter(([r]) => r.kind === kind);
+    if (!members.length) return;
+    list.append(el('p', heading, 'pol-group'));
+    members.forEach(([r, i]) => {
+      const item = el('button', null, 'pol-item' + (i === selected ? ' selected' : '') + (r.enabled ? '' : ' off'));
+      item.type = 'button';
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', String(i === selected));
+      const top = el('span', null, 'pol-item-top');
+      top.append(el('strong', r.title || 'Untitled rule'), el('span', r.enabled ? 'On' : 'Off', 'pol-state'));
+      item.append(top, el('span', `${r.rule_key || 'NEW'} · ${scopeText(r)}`, 'small'));
+      item.onclick = () => {
+        selected = i;
+        renderList();
+        renderEditor();
+      };
+      list.append(item);
+    });
+  });
+  $('rule-count').textContent = String(rules.length);
+}
+
+function renderEditor() {
+  const rule = rules[selected];
+  $('editor-empty').hidden = !!rule;
+  $('editor-body').hidden = !rule;
+  if (!rule) return;
+  $('editor-title').textContent = rule.title || 'Untitled rule';
+  $('f-title').value = rule.title || '';
+  $('f-key').value = rule.rule_key || '';
+  $('f-kind').value = rule.kind;
+  $('f-literal').value = rule.required_literal || '';
+  $('f-literal-wrap').hidden = rule.kind !== 'required_disclosure';
+  $('f-instructions').value = rule.instructions || '';
+  $('f-product').value = rule.product || '';
+  $('f-channel').value = rule.channel || '';
+  $('f-enabled').checked = !!rule.enabled;
+  $('rules-form').querySelectorAll('input,select,textarea,button').forEach(c => c.disabled = !canManage);
+  $('remove-rule').hidden = !canManage;
+}
+
+function renderChrome() {
+  const isDirty = dirty();
+  const active = policies.state.active_version;
+  $('active-pill').textContent = active ? `Published v${active}` : 'Nothing published';
+  $('draft-pill').textContent = isDirty ? 'Unsaved changes' : `Draft v${policies.state.current_draft_version}`;
+  $('draft-pill').className = 'pol-pill' + (isDirty ? ' pol-pill-dirty' : '');
+  $('draft-hint').textContent = '';
+  $('save-btn').disabled = !canManage || !isDirty;
+  $('discard-btn').hidden = !canManage || !isDirty;
+  $('publish-btn').disabled = !canManage || isDirty;
+  $('publish-copy').textContent = !canManage
+    ? ''
+    : isDirty
+      ? 'Save your changes to enable publishing.'
+      : 'Publishing creates a new immutable version used for future reviews.';
+  $('add-rule').hidden = !canManage;
+  $('readonly-banner').hidden = canManage;
+  $('readonly-banner').textContent = 'Read only: your profile lacks the manage_policies permission. Switch to a policy admin from the profile menu (top right) to add, edit or remove rules and publish.';
+}
+
+function onEdit(field, read) {
+  const node = $(field);
+  node.oninput = node.onchange = () => {
+    const rule = rules[selected];
+    if (!rule) return;
+    read(rule, node);
+    if (field === 'f-kind') {
+      $('f-literal-wrap').hidden = rule.kind !== 'required_disclosure';
+    }
+    $('editor-title').textContent = rule.title || 'Untitled rule';
+    renderList();
+    renderChrome();
+  };
 }
 
 function renderSnapshots() {
@@ -165,29 +166,10 @@ function renderAudit() {
   });
 }
 
-function collectRules() {
-  const rows = [...document.querySelectorAll('#rule-list > .policy-rule')];
-  return rows.map(row => {
-    const inputs = row.querySelectorAll('[name]');
-    const rule = {};
-    inputs.forEach(i => {
-      const name = i.name;
-      if (name === 'enabled') {
-        rule.enabled = i.checked ? 1 : 0;
-      } else if (i.type === 'checkbox') {
-        // skip
-      } else if (name === 'required_literal') {
-        rule.required_literal = i.value.trim() || null;
-      } else if (name === 'product') {
-        rule.product = i.value || null;
-      } else if (name === 'channel') {
-        rule.channel = i.value || null;
-      } else if (i.value.trim()) {
-        rule[name] = i.value.trim();
-      }
-    });
-    return rule;
-  });
+function resetWorkingCopy() {
+  rules = (policies.draft || []).map(r => ({ ...r }));
+  saved = serialize();
+  selected = Math.min(selected, Math.max(rules.length - 1, 0));
 }
 
 async function refresh() {
@@ -197,31 +179,33 @@ async function refresh() {
     api('/api/policies/audit').then(r => r.events)
   ]);
   canManage = !!policies.can_manage;
-  $('draft-tag').textContent = `Draft v${policies.state.current_draft_version}`;
-  $('draft-hint').textContent = canManage
-    ? 'You can edit this draft and publish it.'
-    : 'Read only — you do not have the manage_policies capability.';
-  $('publish-copy').textContent = canManage
-    ? 'Save the draft, then publish it as a new immutable version.'
-    : 'Publishing requires the manage_policies capability.';
-  $('publish-btn').disabled = !canManage;
-  renderRules();
+  resetWorkingCopy();
+  renderList();
+  renderEditor();
+  renderChrome();
   renderSnapshots();
   renderAudit();
 }
 
 async function saveDraft() {
-  const rules = collectRules();
   if (!rules.length) {
     notice('Add at least one rule before saving the draft.', true);
     return;
   }
+  const incomplete = rules.findIndex(r => !(r.rule_key || '').trim() || !(r.title || '').trim());
+  if (incomplete >= 0) {
+    selected = incomplete;
+    renderList();
+    renderEditor();
+    notice('Every rule needs a title and a rule ID.', true);
+    return;
+  }
   await api('/api/policies/draft', {
     method: 'PUT',
-    body: { rules, expected_draft_version: policies.state.current_draft_version }
+    body: { rules: rules.map(clean), expected_draft_version: policies.state.current_draft_version }
   });
   await refresh();
-  notice('Draft saved. Review the summary above before publishing.');
+  notice('Draft saved. Publish it when you are ready.');
 }
 
 async function publish() {
@@ -233,29 +217,79 @@ async function publish() {
   notice(`Published as version v${policies.state.active_version}. Earlier reviews are now stale.`);
 }
 
+async function run(task) {
+  const buttons = [...document.querySelectorAll('.pol-actions button')];
+  buttons.forEach(b => b.disabled = true);
+  try {
+    await task();
+  } catch (e) {
+    showError(e);
+  } finally {
+    renderChrome();
+  }
+}
+
+function showTab(name) {
+  document.querySelectorAll('.pol-tab').forEach(t => {
+    const on = t.dataset.tab === name;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', String(on));
+  });
+  ['rules', 'versions', 'activity'].forEach(n => { $(`tab-${n}`).hidden = n !== name; });
+}
+
 async function load() {
   context = await init();
+  fillSelect($('f-kind'), KINDS);
+  fillSelect($('f-product'), PRODUCTS.map(p => [p, label(p)]), 'All products');
+  fillSelect($('f-channel'), CHANNELS.map(c => [c, label(c)]), 'All channels');
   await refresh();
   $('loading').hidden = true;
   $('detail').hidden = false;
 
+  onEdit('f-title', (r, n) => { r.title = n.value; });
+  onEdit('f-key', (r, n) => { r.rule_key = n.value; });
+  onEdit('f-kind', (r, n) => { r.kind = n.value; });
+  onEdit('f-literal', (r, n) => { r.required_literal = n.value; });
+  onEdit('f-instructions', (r, n) => { r.instructions = n.value; });
+  onEdit('f-product', (r, n) => { r.product = n.value || null; });
+  onEdit('f-channel', (r, n) => { r.channel = n.value || null; });
+  onEdit('f-enabled', (r, n) => { r.enabled = n.checked ? 1 : 0; });
+
+  document.querySelectorAll('.pol-tab').forEach(t => { t.onclick = () => showTab(t.dataset.tab); });
+
   $('add-rule').onclick = () => {
-    $('rule-list').append(ruleRow({ kind: 'semantic', enabled: 1 }));
+    rules.push({ kind: 'semantic', enabled: 1, rule_key: '', title: '' });
+    selected = rules.length - 1;
+    renderList();
+    renderEditor();
+    renderChrome();
+    $('f-title').focus();
   };
-  $('rules-form').onsubmit = (e) => {
-    e.preventDefault();
-    return busy(e.currentTarget, saveDraft);
+  $('remove-rule').onclick = () => {
+    rules.splice(selected, 1);
+    selected = Math.max(0, Math.min(selected, rules.length - 1));
+    renderList();
+    renderEditor();
+    renderChrome();
   };
-  $('publish-btn').onclick = () => {
-    $('publish-dialog').showModal();
+  $('discard-btn').onclick = () => {
+    resetWorkingCopy();
+    renderList();
+    renderEditor();
+    renderChrome();
   };
+  $('rules-form').onsubmit = (e) => e.preventDefault();
+  $('save-btn').onclick = () => run(saveDraft);
+  $('publish-btn').onclick = () => $('publish-dialog').showModal();
   $('publish-confirm').onclick = () => {
     $('publish-dialog').close();
-    return busy($('publish-dialog'), publish);
+    return run(publish);
   };
-  $('publish-cancel').onclick = () => {
-    $('publish-dialog').close();
-  };
+  $('publish-cancel').onclick = () => $('publish-dialog').close();
+  window.addEventListener('beforeunload', (e) => {
+    if (canManage && dirty()) e.preventDefault();
+  });
 }
 
 load().catch(e => {

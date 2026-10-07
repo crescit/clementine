@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Policy administration · ClearPath</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/styles.css">
+<link rel="stylesheet" href="/static/styles.css?v=20261013">
 </head>
 <body><a class="skip-link" href="#main">Skip to content</a>
 <header class="app-header"><a class="brand" href="/"><span class="brand-icon" aria-hidden="true">C<span>↗</span></span>ClearPath<span class="brand-product">Compliance</span></a>
@@ -13,71 +13,69 @@
 </header>
 <div class="workspace-bar"><span><span class="live-dot"></span>Demo workspace · fictional data · shared state</span><span>Policy administration</span>
 </div>
-<main id="main" class="app-main"><a class="back-link" href="/">← Back to queue</a>
-<div class="page-heading">
-<div><p class="eyebrow">WORKSPACE / POLICY</p><h1>Policy configuration<span class="heading-dot">.</span></h1><p class="lede">Edit the draft rule set, then publish it as a new immutable version for future reviews.</p>
-</div><span class="step-tag" id="draft-tag">Draft v0</span>
-</div>
+<main id="main" class="app-main pol-main"><a class="back-link" href="/">← Back to queue</a>
 <div id="notice" class="notice" role="status" hidden>
 </div>
 <div id="loading" class="empty">Loading policy configuration…</div>
 <div id="detail" hidden>
-<div class="policy-layout">
-<section class="panel">
-<div class="panel-heading">
-<div><p class="eyebrow">MUTABLE DRAFT</p><h2>Rules & scope</h2>
-</div><span class="small" id="draft-hint"></span>
+<header class="pol-top">
+<div><h1>Policy rules</h1>
+<p class="pol-status"><span class="pol-pill pol-pill-live" id="active-pill"></span><span class="pol-pill" id="draft-pill"></span><span class="small" id="draft-hint"></span></p>
 </div>
-<div class="panel-body">
-<p class="small" id="draft-summary"></p>
-<form id="rules-form" class="form-stack" autocomplete="off">
-<div id="rule-list">
+<div class="pol-actions">
+<button type="button" id="discard-btn" class="quiet" hidden>Discard changes</button>
+<button type="button" id="save-btn" form="rules-form" class="primary">Save draft</button>
+<button type="button" id="publish-btn" class="pol-publish">Publish…</button>
 </div>
-<div class="form-footer"><span class="small" id="rules-note">Bounded text lengths and rule count are enforced server-side. Baseline forbidden-claim checks stay code-owned.</span>
-<div class="actions"><button type="button" id="add-rule" class="quiet">＋ Add rule</button><button type="submit" class="primary">Save draft</button>
+</header>
+<p class="small pol-publish-hint" id="publish-copy"></p>
+<p class="pol-readonly" id="readonly-banner" hidden></p>
+<nav class="pol-tabs" role="tablist">
+<button type="button" role="tab" class="pol-tab active" data-tab="rules" aria-selected="true">Rules <span class="pol-count" id="rule-count"></span></button>
+<button type="button" role="tab" class="pol-tab" data-tab="versions" aria-selected="false">Published versions</button>
+<button type="button" role="tab" class="pol-tab" data-tab="activity" aria-selected="false">Activity</button>
+</nav>
+<section id="tab-rules" class="pol-rules">
+<aside class="pol-list-pane">
+<div id="rule-list" class="pol-list" role="listbox" aria-label="Rules"></div>
+<button type="button" id="add-rule" class="quiet pol-add">＋ Add rule</button>
+</aside>
+<form id="rules-form" class="pol-editor" autocomplete="off">
+<div id="editor-empty" class="empty" hidden>No rules yet. Add one to get started.</div>
+<div id="editor-body" hidden>
+<div class="pol-editor-head"><h2 id="editor-title">Rule</h2>
+<label class="pol-switch"><input id="f-enabled" type="checkbox"><span>Enabled</span></label>
+</div>
+<div class="pol-fields">
+<label class="pol-field"><span class="pol-label">Title</span><input id="f-title" maxlength="120" required><span class="small">Shown to reviewers when this rule flags copy.</span></label>
+<div class="pol-row2">
+<label class="pol-field"><span class="pol-label">Rule ID</span><input id="f-key" maxlength="32" required class="mono"></label>
+<label class="pol-field"><span class="pol-label">Type</span><select id="f-kind"></select></label>
+</div>
+<label class="pol-field" id="f-literal-wrap" hidden><span class="pol-label">Required text</span><input id="f-literal" maxlength="500" placeholder="Exact text the copy must contain verbatim"><span class="small">Copy that omits this exact wording is blocked.</span></label>
+<label class="pol-field"><span class="pol-label">Instructions</span><textarea id="f-instructions" maxlength="2000" rows="5" placeholder="What should the reviewer look for, and why?"></textarea></label>
+<fieldset class="pol-scope"><legend class="pol-label">Applies to</legend>
+<div class="pol-row2">
+<label class="pol-field"><span class="small">Product</span><select id="f-product"></select></label>
+<label class="pol-field"><span class="small">Channel</span><select id="f-channel"></select></label>
+</div></fieldset>
+<div class="pol-editor-foot"><button type="button" id="remove-rule" class="danger quiet">Remove rule</button></div>
 </div>
 </div>
 </form>
-</div>
 </section>
-<section class="panel">
-<div class="panel-heading">
-<div><p class="eyebrow">PUBLISHED VERSIONS</p><h2>Version & history</h2>
-</div><span class="small">Immutable snapshots · active pointer</span>
-</div>
+<section id="tab-versions" class="panel" hidden>
 <div class="panel-body">
 <p class="muted" id="active-summary"></p>
-<div class="table-scroll">
-<table>
-<thead>
-<tr><th>Version</th><th>Label</th><th>Published by</th><th>Published at</th><th>Policy hash</th>
-</tr>
-</thead>
-<tbody id="snapshots-body">
-</tbody>
-</table>
-</div>
+<div class="table-scroll"><table>
+<thead><tr><th>Version</th><th>Label</th><th>Published by</th><th>Published at</th><th>Policy hash</th></tr></thead>
+<tbody id="snapshots-body"></tbody>
+</table></div>
 </div>
 </section>
-<section class="panel">
-<div class="panel-heading">
-<div><p class="eyebrow">AUDIT TRAIL</p><h2>Policy events</h2>
-</div>
-</div>
-<div class="panel-body"><ol id="audit-list" class="timeline">
-</ol>
-</div>
+<section id="tab-activity" class="panel" hidden>
+<div class="panel-body"><ol id="audit-list" class="timeline"></ol></div>
 </section>
-</div>
-</div>
-<div class="policy-sidebar">
-<section class="panel">
-<div class="panel-heading"><h2>Publish</h2>
-</div>
-<div class="panel-body"><p class="small" id="publish-copy"></p><button id="publish-btn" class="primary" type="button">Publish draft →</button>
-</div>
-</section>
-</div>
 </div>
 </main>
 <dialog id="publish-dialog">
@@ -88,9 +86,9 @@
 </div>
 </form>
 </dialog>
-<footer class="app-footer"><span>ClearPath Financial · Internal marketing review</span><span>Fictional demo policies · Human review required</span>
+<footer class="app-footer"><span>ClearPath Financial · Internal marketing review</span><span>Human review required</span>
 </footer>
-<script type="module" src="/static/policies.js">
+<script type="module" src="/static/policies.js?v=20261013">
 </script>
 </body>
 </html>

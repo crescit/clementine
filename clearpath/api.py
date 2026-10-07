@@ -17,12 +17,12 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
-from clearpath import db, metrics as metrics_mod, notifications as notif_mod, policies as policies_mod, review as review_mod, seed, workflow
+from clearpath import auto_analysis, db, metrics as metrics_mod, notifications as notif_mod, policies as policies_mod, review as review_mod, seed, workflow
 from clearpath.identity import CallerId, resolve_actor
 from clearpath.preflight import run_preflight
 from clearpath.models import (
@@ -109,12 +109,19 @@ def _users_rows(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         "SELECT id, name, role, display_title FROM users ORDER BY name"
     ).fetchall()
+    admins = {
+        r["user_id"]
+        for r in conn.execute(
+            "SELECT user_id FROM permissions WHERE capability = 'manage_policies'"
+        )
+    }
     return [
         {
             "id": r["id"],
             "name": r["name"],
             "role": r["role"],
             "display_title": r["display_title"],
+            "can_manage_policies": r["id"] in admins,
         }
         for r in rows
     ]
@@ -212,6 +219,8 @@ def _review_state(conn, row) -> dict:
         "error": None,
         "exception": None,
         "policy": None,
+        "auto_started_at": auto_analysis.pending_since(row["id"], row["current_version"]),
+        "auto_pending": auto_analysis.is_pending(row["id"], row["current_version"]),
     }
     if not review["enabled"]:
         return review
@@ -305,6 +314,16 @@ def _enforce_visible(
             },
         )
     return row
+
+
+class _RevalidatingStaticFiles(StaticFiles):
+    """Static files that browsers must revalidate (ETag) on every load, so UI
+    changes show up on a normal refresh instead of a stale cached copy."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 @asynccontextmanager
@@ -547,6 +566,7 @@ def create_app() -> FastAPI:
                 item = _summary_projection(r)
                 item["urgency"] = metrics_mod.urgency_bucket(now, r["sla_breach_at"])
                 item["allowed_actions"] = _allowed_actions(actor_row, r)
+                item["analyzing"] = auto_analysis.is_pending(r["id"], r["current_version"])
                 items.append(item)
             return {
                 "submissions": items,
@@ -632,6 +652,7 @@ def create_app() -> FastAPI:
     def create_submission(
         payload: IntakeRequest,
         caller_id: CallerId,
+        background_tasks: BackgroundTasks,
     ):
         conn = db.connect()
         try:
@@ -651,6 +672,11 @@ def create_app() -> FastAPI:
                 )
             except workflow.DomainError as exc:
                 return _map_domain_error(exc)
+            auto_analysis.schedule(
+                background_tasks, db.get_database_path(),
+                auto_analysis.TRIGGER_SUBMITTED, result["id"],
+                result["current_version"], actor_row["id"],
+            )
             return result
         finally:
             conn.close()
@@ -709,6 +735,7 @@ def create_app() -> FastAPI:
         submission_id: str,
         payload: ResubmitRequest,
         caller_id: CallerId,
+        background_tasks: BackgroundTasks,
     ):
         conn = db.connect()
         try:
@@ -725,6 +752,11 @@ def create_app() -> FastAPI:
                 )
             except workflow.DomainError as exc:
                 return _map_domain_error(exc)
+            auto_analysis.schedule(
+                background_tasks, db.get_database_path(),
+                auto_analysis.TRIGGER_RESUBMITTED, submission_id,
+                result["current_version"], actor_row["id"],
+            )
             return result
         finally:
             conn.close()
@@ -981,7 +1013,7 @@ def create_app() -> FastAPI:
         return {"status": "reset", "seeded": True}
 
     # --- Static --------------------------------------------------------------------
-    application.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    application.mount("/static", _RevalidatingStaticFiles(directory=str(STATIC_DIR)), name="static")
 
     @application.get("/")
     def index():
