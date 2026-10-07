@@ -198,51 +198,93 @@ def _preflight(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
 
 
 def _review_state(conn, row) -> dict:
-    """Semantic-review state for a submission detail response."""
+    """Semantic-review state for a submission detail response.
+
+    Approvability comes from review.approval_gate, the same check the
+    approve route enforces, so the page never disagrees with the server.
+    """
     review = {
         "enabled": review_mod.semantic_mode_enabled(),
         "run": None,
+        "history": [],
         "stale": False,
         "approvable": False,
         "error": None,
+        "exception": None,
+        "policy": None,
     }
     if not review["enabled"]:
         return review
+    snapshot = review_mod.active_snapshot(conn)
+    if snapshot:
+        review["policy"] = {
+            "snapshot_id": snapshot["id"],
+            "version": snapshot["version"],
+            "label": snapshot.get("label"),
+            "rules": {
+                r["rule_key"]: {"title": r["title"], "instructions": r["instructions"]}
+                for r in snapshot["rules"]
+                if r.get("kind") == "semantic"
+            },
+        }
     runs = review_mod.list_runs(conn, row["id"])
+    review["history"] = [
+        {
+            "id": r["id"],
+            "status": r["status"],
+            "content_version": r["content_version"],
+            "snapshot_version": r["snapshot_version"],
+            "finding_count": len(r.get("findings") or []),
+            "provider_revision": r.get("provider_revision"),
+            "prompt_version": r.get("prompt_version"),
+            "latency_ms": r.get("latency_ms"),
+            "actor_id": r["actor_id"],
+            "created_at": r["created_at"],
+        }
+        for r in runs
+    ]
+    snap_id = snapshot["id"] if snapshot else None
+    ok, _attribution, gate_error = review_mod.approval_gate(
+        conn, row["id"], row["current_version"], snap_id, row["assigned_reviewer_id"]
+    )
+    review["approvable"] = bool(ok)
+    review["error"] = None if ok else (gate_error or {}).get("message")
     if not runs:
         return review
     run = runs[0]  # newest first
-    snap_id = policies_mod.get_state(conn).get("active_snapshot_id")
-    stale = run["content_version"] != row["current_version"] or run["snapshot_id"] != snap_id
-    dispositions = review_mod.run_dispositions(conn, run["id"])
-    disposed = {}
-    for d in dispositions:
-        disposed.setdefault(d["finding_id"], d)
+    review["stale"] = (
+        run["content_version"] != row["current_version"] or run["snapshot_id"] != snap_id
+    )
+    disposed: dict = {}
+    for d in review_mod.run_dispositions(conn, run["id"]):
+        disposed[d["finding_id"]] = d
     findings = []
     for f in run.get("findings") or []:
         finding = dict(f)
-        finding["disposition"] = disposed.get(f.get("finding_id")) or None
+        finding["disposition"] = disposed.get(f.get("finding_id"))
         findings.append(finding)
     review["run"] = {
         "id": run["id"],
         "status": run["status"],
+        "content_version": run["content_version"],
+        "snapshot_version": run["snapshot_version"],
         "findings": findings,
-        "latency_ms": run["latency_ms"],
-        "failure_code": run.get("failure_code"),
-        "failure_message": run.get("failure_message"),
+        "latency_ms": run.get("latency_ms"),
+        "provider_revision": run.get("provider_revision"),
+        "prompt_version": run.get("prompt_version"),
+        "actor_id": run["actor_id"],
         "created_at": run["created_at"],
     }
-    review["stale"] = stale
-    if stale:
-        review["error"] = "The semantic analysis is stale; re-run analysis on the current copy and policy."
-    elif run["status"] != "SUCCESS":
-        review["error"] = run.get("failure_message") or f"Semantic analysis {run['status']}."
-    elif any(f["disposition"] is None for f in findings):
-        review["error"] = "Every semantic finding must be dispositioned before approval."
-    else:
-        review["approvable"] = True
+    if run["status"] != review_mod.STATUS_SUCCESS and snap_id:
+        review["exception"] = review_mod.manual_exception(
+            conn, row["id"], run["content_version"], snap_id, run["id"]
+        )
+    if review["stale"]:
+        review["error"] = (
+            "The latest analysis is for an older version or policy; "
+            "re-run analysis on the current copy."
+        )
     return review
-
 
 
 def _enforce_visible(

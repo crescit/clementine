@@ -22,8 +22,83 @@ const ACTION_SAVED = {
   'request-changes': 'Changes requested. The submitter can revise on this same record.',
   reject: 'Rejected. The decision is recorded in the activity trail.',
   assign: 'Assignment updated. The next owner is visible on this record.',
-  resubmit: 'Revision submitted. A new version is ready for review.'
+  resubmit: 'Revision submitted. A new version is ready for review.',
+  analyze: 'Analysis saved. Findings are attributed to this version and policy.',
+  dispositions: 'Disposition recorded on this finding.',
+  exceptions: 'Manual exception recorded. You can now decide on this version.'
 };
+const DISPOSITION_LABEL = {ACKNOWLEDGED: 'Acknowledged — needs change', DISMISSED: 'Dismissed — not a violation'};
+
+function showReview(current) {
+  const rv = record.review;
+  $('semantic-panel').hidden = !rv || !rv.enabled;
+  if (!rv || !rv.enabled) return;
+  const isReviewer = context.actor.id === record.assigned_reviewer_id;
+  const open = !['APPROVED', 'REJECTED', 'CHANGES_REQUESTED'].includes(record.status);
+  const run = rv.run;
+  const pol = rv.policy;
+  $('semantic-policy').textContent = pol ? `Policy v${pol.version}${pol.label ? ' · ' + pol.label : ''} · ${Object.keys(pol.rules).length} semantic rules` : 'No published policy — analysis is unavailable.';
+  $('analyze').hidden = !(isReviewer && open && current && pol);
+  $('analyze').textContent = run ? 'Re-run analysis' : 'Analyze current version';
+  let title, summary, cls;
+  if (!run) {
+    [title, summary, cls] = ['Not analyzed', isReviewer ? 'Run an analysis of the current copy before approving.' : 'Waiting for the assigned reviewer to analyze this version.', 'muted'];
+  } else if (rv.stale) {
+    [title, summary, cls] = ['Analysis is stale', rv.error, 'check-blocked'];
+  } else if (run.status !== 'SUCCESS') {
+    [title, summary, cls] = ['Analysis failed', rv.exception ? `Manual exception recorded by ${person(context.users, rv.exception.actor_id)}: ${rv.exception.reason}` : 'The model call failed. Re-run, or record a manual exception and review by hand.', 'check-blocked'];
+  } else if (!run.findings.length) {
+    [title, summary, cls] = ['No semantic findings', '✓ No implied approval promises found in this version.', 'check-passed'];
+  } else {
+    const pending = run.findings.filter(f => !f.disposition).length;
+    [title, summary, cls] = [`${run.findings.length} semantic finding${run.findings.length === 1 ? '' : 's'}`, pending ? `! ${pending} awaiting a reviewer disposition` : '✓ Every finding has a disposition', pending ? 'check-blocked' : 'check-passed'];
+  }
+  $('semantic-title').textContent = title;
+  $('semantic-summary').className = cls;
+  $('semantic-summary').textContent = summary;
+  const findings = run && !rv.stale && run.status === 'SUCCESS' ? run.findings : [];
+  $('semantic-findings').replaceChildren(...findings.map(f => {
+    const item = el('div', null, 'finding');
+    const rule = pol && pol.rules[f.rule_key];
+    item.append(el('span', `${f.rule_key} · ${f.severity} · source: model (${run.provider_revision || 'unknown'})`, 'small'), el('h3', f.title));
+    item.append(el('blockquote', f.evidence_quote));
+    item.append(el('p', f.explanation));
+    if (rule) item.append(el('p', `Policy: ${rule.instructions}`, 'small'));
+    if (f.suggested_revision) item.append(el('p', `Suggested revision: ${f.suggested_revision}`));
+    if (f.disposition) {
+      item.append(el('p', `${DISPOSITION_LABEL[f.disposition.disposition] || f.disposition.disposition} · ${person(context.users, f.disposition.actor_id)} · ${date(f.disposition.created_at, true)} — ${f.disposition.reason}`, 'small check-passed'));
+    } else if (isReviewer && open && current) {
+      const form = el('form', null, 'form-stack');
+      const reason = el('textarea');
+      reason.rows = 2; reason.maxLength = 2000; reason.required = true; reason.placeholder = 'Reason (required)';
+      reason.setAttribute('aria-label', `Disposition reason for ${f.rule_key}`);
+      const actions = el('div', null, 'actions');
+      for (const [value, text] of [['ACKNOWLEDGED', 'Acknowledge'], ['DISMISSED', 'Dismiss']]) {
+        const b = el('button', text); b.type = 'submit'; b.value = value; actions.append(b);
+      }
+      form.append(reason, actions);
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        if (!reason.value.trim()) { reason.reportValidity(); return; }
+        await busy(form, () => reviewAction('dispositions', {run_id: run.id, finding_id: f.finding_id, disposition: e.submitter.value, reason: reason.value.trim()}));
+      };
+      item.append(form);
+    }
+    return item;
+  }));
+  $('exception-form').hidden = !(isReviewer && open && current && run && !rv.stale && run.status !== 'SUCCESS' && !rv.exception);
+  $('semantic-history').hidden = !rv.history.length;
+  $('semantic-runs').replaceChildren(...rv.history.map(h => {
+    const li = el('li');
+    li.append(el('strong', `${label(h.status)} · ${h.finding_count} finding${h.finding_count === 1 ? '' : 's'}`), el('span', `Version ${h.content_version} · Policy v${h.snapshot_version} · ${h.provider_revision || 'no model response'} · ${h.prompt_version} · ${person(context.users, h.actor_id)} · ${date(h.created_at, true)}`, 'small'));
+    return li;
+  }));
+}
+async function reviewAction(action, body) {
+  await api(`${path}/${action}`, {method: 'POST', body, timeoutMs: action === 'analyze' ? 180000 : 15000});
+  await render();
+  notice(ACTION_SAVED[action]);
+}
 
 function safeLink(url) {
   try {
@@ -76,8 +151,10 @@ function showVersion() {
   const canDecide = record.allowed_actions.includes('APPROVE');
   $('decision-form').hidden = !canDecide;
   $('decision-form').querySelectorAll('button').forEach(b => b.disabled = !current);
-  $('approve').disabled = !current || !record.preflight.passed;
-  $('approve-hint').textContent = !current ? 'Select the current version to make a decision.' : record.preflight.passed ? 'Approves the exact current copy shown here.' : 'Approval is blocked until the findings above are resolved.';
+  const semanticBlocked = record.review && record.review.enabled && !record.review.approvable;
+  $('approve').disabled = !current || !record.preflight.passed || semanticBlocked;
+  $('approve-hint').textContent = !current ? 'Select the current version to make a decision.' : !record.preflight.passed ? 'Approval is blocked until the findings above are resolved.' : semanticBlocked ? `Approval is blocked by semantic review: ${record.review.error}` : 'Approves the exact current copy shown here.';
+  showReview(current);
 }
 async function render() {
   [record, history] = await Promise.all([api(path), api(`${path}/history`)]);
@@ -214,6 +291,26 @@ async function load() {
       reviewer_id: $('assign-reviewer').value,
       comment: $('assign-comment').value.trim() || null
     }));
+  };
+  $('analyze').onclick = async (e) => {
+    const button = e.currentTarget;
+    button.disabled = true;
+    $('semantic-title').textContent = 'Analyzing…';
+    $('semantic-summary').className = 'muted';
+    $('semantic-summary').textContent = 'The model is reviewing the current copy against the published policy. This can take up to a minute.';
+    try {
+      await reviewAction('analyze', {});
+    } catch (err) {
+      showError(err);
+      await render();
+    } finally {
+      button.disabled = false;
+    }
+  };
+  $('exception-form').onsubmit = async (e) => {
+    e.preventDefault();
+    await busy(e.currentTarget, () => reviewAction('exceptions', {run_id: record.review.run.id, reason: $('exception-reason').value.trim()}));
+    $('exception-reason').value = '';
   };
   $('revision-form').onsubmit = async (e) => {
     e.preventDefault();

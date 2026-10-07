@@ -72,6 +72,21 @@
 </form>
 </div>
 </section>
+<section class="panel" id="semantic-panel" hidden>
+<div class="panel-heading">
+<div><p class="eyebrow">SEMANTIC REVIEW · MODEL-ASSISTED</p><h2 id="semantic-title">Semantic review</h2>
+</div>
+</div>
+<div class="panel-body"><p id="semantic-summary" role="status"></p><p id="semantic-policy" class="small"></p>
+<button id="analyze" type="button" hidden>Analyze current version</button>
+<div id="semantic-findings">
+</div>
+<form id="exception-form" class="form-stack" hidden><label>Manual review exception <span class="small">Required reason · recorded in the audit trail</span><textarea id="exception-reason" rows="2" maxlength="2000" required></textarea></label><button type="submit">Record exception and review manually</button>
+</form>
+<details id="semantic-history" hidden><summary class="small">Analysis history</summary><ol id="semantic-runs" class="timeline"></ol>
+</details><p class="small">Model findings are advisory evidence. The assigned reviewer records every disposition and the final decision.</p>
+</div>
+</section>
 <section class="panel">
 <div class="panel-heading">
 <div><p class="eyebrow">DEMO POLICY CHECK</p><h2 id="preflight-title">Preflight</h2>

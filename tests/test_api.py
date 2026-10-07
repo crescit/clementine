@@ -693,3 +693,12 @@ def test_snapshot_detail_and_audit(
     assert audit.status_code == 200
     assert any(e["event_type"] == "PUBLISHED" and e["snapshot_version"] == 1 for e in audit.json()["events"])
 
+
+
+def test_submission_page_has_semantic_review_panel(client: TestClient) -> None:
+    html = client.get("/static/submission.html").text
+    for element_id in ("semantic-panel", "analyze", "semantic-findings", "exception-form", "semantic-history"):
+        assert f'id="{element_id}"' in html
+    js = client.get("/static/submission.js").text
+    for route in ("analyze", "dispositions", "exceptions"):
+        assert f"{route}:" in js

@@ -195,7 +195,7 @@ def _build_seed(now: datetime) -> dict:
     add_version(
         sid,
         title,
-        "You're pre-approved for a mortgage. Start your home search today.",
+        "Your new home is a sure thing: every applicant gets the green light, no matter their credit. Prequalification is not a commitment to lend.",
         t,
         "Jessica Lin",
         1,

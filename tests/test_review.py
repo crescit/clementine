@@ -392,11 +392,12 @@ def test_review_state_in_submission_detail(temp_db, frozen_now, monkeypatch):
     finally:
         conn.close()
 
-    # No analysis yet -> enabled, no run, not approvable, no error.
+    # No analysis yet -> enabled, no run, not approvable, gate explains why.
     assert state["enabled"] is True
     assert state["run"] is None
     assert state["approvable"] is False
-    assert state["error"] is None
+    assert "required before approval" in state["error"]
+    assert state["policy"]["rules"]
     assert state["stale"] is False
 
     _monkeypatch_provider(monkeypatch, FakeProvider(response=json.dumps({
@@ -422,7 +423,8 @@ def test_review_state_in_submission_detail(temp_db, frozen_now, monkeypatch):
     assert len(state["run"]["findings"]) == len(run["findings"])
     assert all(f["disposition"] is None for f in state["run"]["findings"])
     assert state["approvable"] is False
-    assert state["error"] == "Every semantic finding must be dispositioned before approval."
+    assert state["error"].startswith("Every semantic finding must be dispositioned")
+    assert state["history"][0]["id"] == run["id"]
 
     reviewer, _ = _assigned(temp_db, sid)
     for f in run["findings"]:
