@@ -1,5 +1,10 @@
 # Labeled Evaluation Cases — S0 seed set (12 cases)
 
+Canonical source: eval/cases.json now carries the full labeled evaluation set
+(>=30 cases, held-out split frozen before prompt tuning). This document remains
+the FROZEN human-readable seed set; the 12 seed cases below are unchanged
+(same ids and labels) and stay in the "dev" split.
+
 Status: FROZEN seed set for the semantic-review evaluation (S2 consumes; S6
 extends to >=30 and runs the deterministic-vs-hybrid harness).
 Revision: 2026-10-06-semantic-v1
