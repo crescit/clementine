@@ -12,7 +12,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-SCHEMA_USER_VERSION = 3
+SCHEMA_USER_VERSION = 4
 
 _NOTIFICATIONS_DDL = """
 CREATE TABLE IF NOT EXISTS notifications (
@@ -87,6 +87,55 @@ CREATE TABLE IF NOT EXISTS policy_audit (
 );
 CREATE INDEX IF NOT EXISTS idx_policy_audit_created ON policy_audit(created_at);
 CREATE INDEX IF NOT EXISTS idx_policy_rules_version ON policy_rules(draft_version);
+"""
+
+_REVIEW_DDL = """
+CREATE TABLE IF NOT EXISTS analysis_runs (
+    id                TEXT PRIMARY KEY,
+    submission_id     TEXT NOT NULL REFERENCES submissions(id),
+    content_version   INTEGER NOT NULL CHECK (content_version >= 1),
+    content_hash      TEXT NOT NULL,
+    product           TEXT NOT NULL,
+    channel           TEXT NOT NULL,
+    snapshot_id       TEXT NOT NULL,
+    snapshot_version  INTEGER NOT NULL,
+    snapshot_hash     TEXT NOT NULL,
+    status            TEXT NOT NULL CHECK (status IN ('SUCCESS', 'FAILED')),
+    findings_json     TEXT NOT NULL DEFAULT '[]',
+    latency_ms        REAL,
+    token_usage_json  TEXT,
+    provider_revision TEXT,
+    prompt_version    TEXT NOT NULL,
+    schema_version    TEXT NOT NULL,
+    actor_id          TEXT NOT NULL REFERENCES users(id),
+    created_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_analysis_runs_lookup
+    ON analysis_runs(submission_id, content_version, snapshot_id, status, created_at);
+
+CREATE TABLE IF NOT EXISTS finding_dispositions (
+    run_id      TEXT NOT NULL REFERENCES analysis_runs(id),
+    finding_id  TEXT NOT NULL,
+    disposition TEXT NOT NULL CHECK (disposition IN ('ACKNOWLEDGED', 'DISMISSED')),
+    reason      TEXT NOT NULL,
+    actor_id    TEXT NOT NULL REFERENCES users(id),
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (run_id, finding_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dispositions_run ON finding_dispositions(run_id);
+
+CREATE TABLE IF NOT EXISTS manual_exceptions (
+    id               TEXT PRIMARY KEY,
+    submission_id    TEXT NOT NULL REFERENCES submissions(id),
+    content_version  INTEGER NOT NULL CHECK (content_version >= 1),
+    snapshot_id      TEXT NOT NULL,
+    run_id           TEXT NOT NULL REFERENCES analysis_runs(id),
+    reason           TEXT NOT NULL,
+    actor_id         TEXT NOT NULL REFERENCES users(id),
+    created_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_manual_exceptions_lookup
+    ON manual_exceptions(submission_id, content_version, snapshot_id, run_id);
 """
 
 _SCHEMA = """
@@ -169,8 +218,8 @@ CREATE INDEX idx_versions_submission  ON submission_versions(submission_id);
 CREATE INDEX idx_audit_submission     ON audit_events(submission_id);
 CREATE INDEX idx_audit_created        ON audit_events(created_at);
 CREATE INDEX idx_notifications_inbox  ON notifications(recipient_id, created_at);
-CREATE INDEX idx_notifications_unread ON notifications(recipient_id, read_at);
-""" + _POLICY_DDL
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(recipient_id, read_at);
+""" + _POLICY_DDL + _REVIEW_DDL
 
 _EXPECTED_TABLES = {
     "users",
@@ -183,6 +232,9 @@ _EXPECTED_TABLES = {
     "policy_state",
     "policy_rules",
     "policy_audit",
+    "analysis_runs",
+    "finding_dispositions",
+    "manual_exceptions",
 }
 
 _V1_TABLES = {
@@ -231,13 +283,20 @@ def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
 
     conn.executescript(_NOTIFICATIONS_DDL)
     backfill(conn)
-    conn.execute(f"PRAGMA user_version = {SCHEMA_USER_VERSION}")
+    conn.execute("PRAGMA user_version = 2")
     conn.commit()
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
     """Add policy/permission/audit tables without touching existing data."""
     conn.executescript(_POLICY_DDL)
+    conn.execute("PRAGMA user_version = 3")
+    conn.commit()
+
+
+def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
+    """Add persisted review/analysis tables without touching existing data."""
+    conn.executescript(_REVIEW_DDL)
     conn.execute(f"PRAGMA user_version = {SCHEMA_USER_VERSION}")
     conn.commit()
 
@@ -268,12 +327,20 @@ def initialize_schema(conn: sqlite3.Connection) -> bool:
             )
         _migrate_v1_to_v2(conn)
         _migrate_v2_to_v3(conn)
+        _migrate_v3_to_v4(conn)
         return False
 
     if version == 2:
         # v2 databases carry the base domain tables; only the policy tables
         # are missing. Add them without deleting or reseeding existing data.
         _migrate_v2_to_v3(conn)
+        _migrate_v3_to_v4(conn)
+        return False
+
+    if version == 3:
+        # v3 databases carry policy tables; add the review/analysis tables
+        # without deleting or reseeding existing data.
+        _migrate_v3_to_v4(conn)
         return False
 
     if version != SCHEMA_USER_VERSION:

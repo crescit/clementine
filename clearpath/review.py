@@ -401,8 +401,11 @@ def analyze_submission(db_path, submission_id, actor_id, now_iso):
     try:
         _authorize_reviewer(read, submission_id, actor_id)
         row = read.execute(
-            "SELECT copy_text, asset_url, product, channel, current_version "
-            "FROM submissions WHERE id = ?",
+            "SELECT s.current_version, v.copy_text, v.asset_url, s.product, s.channel "
+            "FROM submissions s "
+            "JOIN submission_versions v ON v.submission_id = s.id "
+            "   AND v.version_number = s.current_version "
+            "WHERE s.id = ?",
             (submission_id,),
         ).fetchone()
         snapshot = active_snapshot(read)
