@@ -108,7 +108,7 @@ def main() -> None:
     lines.append(f"```\n{copy}\n```")
 
     out_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "docs", "S2_provider_evidence.md"
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "S2_provider_evidence.md"
     )
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w") as fh:
