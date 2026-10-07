@@ -29,6 +29,24 @@ function parseNonNegInt(value, fallback) {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
+function analyzingTag() {
+  const tag = el('span', null, 'analyzing-tag');
+  tag.append(el('span', null, 'spinner'), document.createTextNode('Analyzing…'));
+  return tag;
+}
+let queuePoll;
+function pollWhileAnalyzing(query, anyAnalyzing) {
+  clearTimeout(queuePoll);
+  if (!anyAnalyzing) return;
+  // Reload the list once the automatic analyses finish so the tag clears itself.
+  queuePoll = setTimeout(async () => {
+    try {
+      const latest = await api(`/api/submissions?${query}`);
+      if (latest.submissions.some(x => x.analyzing)) pollWhileAnalyzing(query, true);
+      else location.reload();
+    } catch (e) { pollWhileAnalyzing(query, true); }
+  }, 5000);
+}
 async function load() {
   const {
     users,
@@ -95,6 +113,7 @@ async function load() {
   $('as-of').textContent = `Updated ${date(metrics.as_of,true)}`;
   $('time-heading').textContent = completed ? 'Decision date' : 'Review target';
   $('queue-body').replaceChildren();
+  pollWhileAnalyzing(query, submissions.some(x => x.analyzing));
   for (const s of submissions) {
     const row = el('tr');
     const campaign = el('td');
@@ -103,6 +122,7 @@ async function load() {
     campaign.append(link, el('span', `${s.external_id} · ${label(s.product)} · ${s.partner || label(s.channel)}`, 'campaign-meta'));
     const status = el('td');
     status.append(badge(s.status));
+    if (s.analyzing) status.append(analyzingTag());
     if (!completed) status.append(el('span', s.status === 'CHANGES_REQUESTED' ? 'Waiting on marketer' : 'Waiting on compliance', 'campaign-meta'));
     const reviewer = el('td', person(users, s.assigned_reviewer_id));
     const target = el('td');

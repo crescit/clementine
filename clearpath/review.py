@@ -391,7 +391,7 @@ def _authorize_reviewer(conn, submission_id, actor_id):
         )
 
 
-def analyze_submission(db_path, submission_id, actor_id, now_iso):
+def analyze_submission(db_path, submission_id, actor_id, now_iso, authorize=True):
     """Run one semantic analysis, persisting the run with freshness checks.
 
     Returns the stored run dict. Raises ReviewError on auth / staleness.
@@ -399,7 +399,8 @@ def analyze_submission(db_path, submission_id, actor_id, now_iso):
     # Phase 1 — read/authorize/capture on a read connection, then release.
     read = db.connect(db_path)
     try:
-        _authorize_reviewer(read, submission_id, actor_id)
+        if authorize:
+            _authorize_reviewer(read, submission_id, actor_id)
         row = read.execute(
             "SELECT s.current_version, v.copy_text, v.asset_url, s.product, s.channel "
             "FROM submissions s "
