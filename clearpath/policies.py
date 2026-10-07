@@ -253,6 +253,17 @@ def check_capability(conn: sqlite3.Connection, user_id: str | None, capability: 
         )
 
 
+def has_capability(conn: sqlite3.Connection, user_id: str | None, capability: str) -> bool:
+    """Non-raising capability check (no auth/403 thrown) for UI hints."""
+    if not user_id:
+        return False
+    row = conn.execute(
+        "SELECT 1 FROM permissions WHERE user_id = ? AND capability = ?",
+        (user_id, capability),
+    ).fetchone()
+    return row is not None
+
+
 def grant_capability(conn: sqlite3.Connection, user_id: str, capability: str, now: str) -> None:
     """Grant (idempotently) a capability to a user."""
     conn.execute(

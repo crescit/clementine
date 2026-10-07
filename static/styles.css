@@ -1178,6 +1178,49 @@ fieldset:disabled {
   align-items: start
 }
 
+.policy-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2.3fr) minmax(240px, 1fr);
+  gap: 28px;
+  align-items: start
+}
+
+.policy-sidebar {
+  display: grid;
+  gap: 20px
+}
+
+.policy-rule {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin: 16px 0;
+  background: #fff;
+  display: grid;
+  gap: 14px
+}
+
+.policy-rule .form-grid {
+  grid-template-columns: 1fr 1fr 1fr
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px
+}
+
+.check-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted)
+}
+
 .intake-guide {
   padding: 30px;
   border: 1px solid #dde1f2;
@@ -1475,7 +1518,8 @@ dialog .actions {
   }
 
   .review-layout,
-  .intake-layout {
+  .intake-layout,
+  .policy-layout {
     grid-template-columns: 1fr
   }
 

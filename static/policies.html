@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Policy administration · ClearPath</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body><a class="skip-link" href="#main">Skip to content</a>
+<header class="app-header"><a class="brand" href="/"><span class="brand-icon" aria-hidden="true">C<span>↗</span></span>ClearPath<span class="brand-product">Compliance</span></a>
+<div id="header-actions" class="header-actions">
+</div>
+</header>
+<div class="workspace-bar"><span><span class="live-dot"></span>Demo workspace · fictional data · shared state</span><span>Policy administration</span>
+</div>
+<main id="main" class="app-main"><a class="back-link" href="/">← Back to queue</a>
+<div class="page-heading">
+<div><p class="eyebrow">WORKSPACE / POLICY</p><h1>Policy configuration<span class="heading-dot">.</span></h1><p class="lede">Edit the draft rule set, then publish it as a new immutable version for future reviews.</p>
+</div><span class="step-tag" id="draft-tag">Draft v0</span>
+</div>
+<div id="notice" class="notice" role="status" hidden>
+</div>
+<div id="loading" class="empty">Loading policy configuration…</div>
+<div id="detail" hidden>
+<div class="policy-layout">
+<section class="panel">
+<div class="panel-heading">
+<div><p class="eyebrow">MUTABLE DRAFT</p><h2>Rules & scope</h2>
+</div><span class="small" id="draft-hint"></span>
+</div>
+<div class="panel-body">
+<p class="small" id="draft-summary"></p>
+<form id="rules-form" class="form-stack" autocomplete="off">
+<div id="rule-list">
+</div>
+<div class="form-footer"><span class="small" id="rules-note">Bounded text lengths and rule count are enforced server-side. Baseline forbidden-claim checks stay code-owned.</span>
+<div class="actions"><button type="button" id="add-rule" class="quiet">＋ Add rule</button><button type="submit" class="primary">Save draft</button>
+</div>
+</div>
+</form>
+</div>
+</section>
+<section class="panel">
+<div class="panel-heading">
+<div><p class="eyebrow">PUBLISHED VERSIONS</p><h2>Version & history</h2>
+</div><span class="small">Immutable snapshots · active pointer</span>
+</div>
+<div class="panel-body">
+<p class="muted" id="active-summary"></p>
+<div class="table-scroll">
+<table>
+<thead>
+<tr><th>Version</th><th>Label</th><th>Published by</th><th>Published at</th><th>Policy hash</th>
+</tr>
+</thead>
+<tbody id="snapshots-body">
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section class="panel">
+<div class="panel-heading">
+<div><p class="eyebrow">AUDIT TRAIL</p><h2>Policy events</h2>
+</div>
+</div>
+<div class="panel-body"><ol id="audit-list" class="timeline">
+</ol>
+</div>
+</section>
+</div>
+</div>
+<div class="policy-sidebar">
+<section class="panel">
+<div class="panel-heading"><h2>Publish</h2>
+</div>
+<div class="panel-body"><p class="small" id="publish-copy"></p><button id="publish-btn" class="primary" type="button">Publish draft →</button>
+</div>
+</section>
+</div>
+</div>
+</main>
+<dialog id="publish-dialog">
+<form method="dialog">
+<h2>Publish this draft?</h2>
+<p>This creates a new immutable policy version and advances the active pointer. Future analyses and decisions on open submissions are checked against it — earlier reviews are marked stale and cannot be approved until re-analyzed. Published versions cannot be edited or deleted.</p>
+<div class="actions"><button value="cancel" type="button" id="publish-cancel">Cancel</button><button value="confirm" id="publish-confirm" class="primary">Publish version</button>
+</div>
+</form>
+</dialog>
+<footer class="app-footer"><span>ClearPath Financial · Internal marketing review</span><span>Fictional demo policies · Human review required</span>
+</footer>
+<script type="module" src="/static/policies.js">
+</script>
+</body>
+</html>

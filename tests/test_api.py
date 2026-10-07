@@ -33,18 +33,19 @@ def test_root_serves_index(client: TestClient) -> None:
 
 
 def test_static_pages_available(client: TestClient) -> None:
-    for page in ["index.html", "submission.html", "submit.html"]:
+    for page in ["index.html", "submission.html", "submit.html", "policies.html"]:
         response = client.get(f"/static/{page}")
         assert response.status_code == 200, f"{page} failed"
         assert "text/html" in response.headers["content-type"], f"{page} not html"
     index = client.get("/static/index.html").content
     assert b"queue.js" in index
-    # Each page wires its own native module script (queue.js / submission.js / submit.js).
+    # Each page wires its own native module script (queue.js / submission.js / submit.js / policies.js).
     assert b'type="module"' in index
     assert b"submission.js" in client.get("/static/submission.html").content
     assert b"submit.js" in client.get("/static/submit.html").content
+    assert b"policies.js" in client.get("/static/policies.html").content
     # All pages import the shared common.js seam.
-    for page in ["queue.js", "submission.js", "submit.js"]:
+    for page in ["queue.js", "submission.js", "submit.js", "policies.js"]:
         assert b"common.js" in client.get(f"/static/{page}").content
 
 
@@ -562,6 +563,7 @@ def test_policies_overview_as_admin(seeded_client: TestClient, temp_db: Path) ->
     assert body["state"]["active_version"] == 1
     assert body["active"]["version"] == 1
     assert len(body["draft"]) == 5
+    assert body["can_manage"] is True
 
 
 def test_draft_save_denied_for_submitter(
@@ -578,6 +580,9 @@ def test_draft_save_denied_for_submitter(
     )
     assert resp.status_code == 403
     assert resp.json()["code"] == "CAPABILITY_REQUIRED"
+    # The overview also reports the submitter cannot manage policies.
+    overview = seeded_client.get("/api/policies", headers={"X-Demo-User-Id": submitter}).json()
+    assert overview["can_manage"] is False
 
 
 def test_draft_save_invalid_rules_rejected(

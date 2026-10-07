@@ -694,13 +694,14 @@ def create_app() -> FastAPI:
         """Active publication, mutable draft, and state (any authenticated user)."""
         conn = db.connect()
         try:
-            resolve_actor(conn, caller_id)
+            actor_row = resolve_actor(conn, caller_id)
             state = policies_mod.get_state(conn)
             active = policies_mod.get_snapshot(conn, state["active_version"]) if state["active_version"] is not None else None
             return {
                 "state": state,
                 "active": active,
                 "draft": policies_mod.get_draft(conn),
+                "can_manage": policies_mod.has_capability(conn, actor_row["id"], "manage_policies"),
             }
         finally:
             conn.close()
