@@ -260,6 +260,7 @@ def test_publish_creates_immutable_snapshot_and_advances_pointer(
         )
         res = policies.publish_draft(
             conn, reviewer, expected_draft_version=1,
+            expected_active_version=1,
             now=frozen_now.isoformat().replace("+00:00", "Z"),
         )
         assert res["version"] == 2  # baseline was v1, this publish is v2
@@ -293,6 +294,52 @@ def test_published_snapshot_is_immutable(temp_db: Path, frozen_now):
         assert {r["rule_key"]: r for r in after["rules"]} == before
     finally:
         conn.close()
+
+
+def test_concurrent_publication_conflicts(temp_db: Path, frozen_now):
+    """Two publishers from the same expected versions: exactly one succeeds.
+
+    The active-version check plus `BEGIN IMMEDIATE` serialization turns a
+    second concurrent publish into a 409 instead of a second snapshot — no
+    concurrent last-write-wins publishing.
+    """
+    _seed_policies(temp_db, frozen_now)
+    reviewer = _reviewer_id(temp_db)
+    now = frozen_now.isoformat().replace("+00:00", "Z")
+
+    # Two connections both believe active == v1 and draft == 0 (the baseline).
+    conn_a = db.connect(temp_db)
+    conn_b = db.connect(temp_db)
+    try:
+        db.initialize_schema(conn_a)
+        db.initialize_schema(conn_b)
+
+        # Publisher A commits first.
+        conn_a.execute("BEGIN IMMEDIATE")
+        res_a = policies.publish_draft(
+            conn_a, reviewer, expected_draft_version=0,
+            expected_active_version=1, now=now,
+        )
+        conn_a.execute("COMMIT")
+        assert res_a["version"] == 2
+
+        # Publisher B races from the SAME expected versions; the active version
+        # has already advanced to 2, so this must 409 without creating v3.
+        conn_b.execute("BEGIN IMMEDIATE")
+        with pytest.raises(policies.PolicyError) as exc:
+            policies.publish_draft(
+                conn_b, reviewer, expected_draft_version=0,
+                expected_active_version=1, now=now,
+            )
+        assert exc.value.status == 409
+        conn_b.execute("ROLLBACK")
+
+        # Exactly one new snapshot exists beyond the baseline (v1 + v2 only).
+        snaps = policies.list_snapshots(conn_b)
+        assert [s["version"] for s in snaps] == [1, 2]
+    finally:
+        conn_a.close()
+        conn_b.close()
 
 
 # --- Demo reset ---------------------------------------------------------------------

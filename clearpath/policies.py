@@ -344,8 +344,17 @@ def get_state(conn: sqlite3.Connection) -> dict[str, Any]:
     ).fetchone()
     if row is None:
         raise PolicyError("INTERNAL_ERROR", "policy_state row missing", 500)
+    active_version: int | None = None
+    if row["active_snapshot_id"] is not None:
+        snap = conn.execute(
+            "SELECT version FROM policy_snapshots WHERE id = ?",
+            (row["active_snapshot_id"],),
+        ).fetchone()
+        if snap is not None:
+            active_version = int(snap["version"])
     return {
         "active_snapshot_id": row["active_snapshot_id"],
+        "active_version": active_version,
         "current_draft_version": row["current_draft_version"],
         "current_draft_hash": row["current_draft_hash"],
     }
@@ -508,9 +517,16 @@ def publish_draft(
     conn: sqlite3.Connection,
     actor_id: str,
     expected_draft_version: int,
+    expected_active_version: int | None,
     now: str,
 ) -> dict[str, Any]:
-    """Atomically publish the current draft as a new immutable snapshot."""
+    """Atomically publish the current draft as a new immutable snapshot.
+
+    The caller must hold a write transaction (`BEGIN IMMEDIATE`) so concurrent
+    publishers serialize: the active-version check below turns a concurrent
+    publish from the same expected versions into a 409 instead of a second
+    snapshot (no concurrent last-write-wins publishing).
+    """
     check_capability(conn, actor_id, "manage_policies")
 
     state = get_state(conn)
@@ -522,6 +538,18 @@ def publish_draft(
             f"current is {current_version}",
             409,
             {"expected_draft_version": expected_draft_version, "current_draft_version": current_version},
+        )
+
+    if expected_active_version is not None and state["active_version"] != expected_active_version:
+        raise PolicyError(
+            STALE_PUBLISH,
+            f"Stale publish: expected active version {expected_active_version}, "
+            f"current is {state['active_version']}",
+            409,
+            {
+                "expected_active_version": expected_active_version,
+                "current_active_version": state["active_version"],
+            },
         )
 
     draft = get_draft(conn)
