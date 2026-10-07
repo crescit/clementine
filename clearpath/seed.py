@@ -534,6 +534,7 @@ def _build_seed(now: datetime) -> dict:
 def _insert_seed(conn: sqlite3.Connection, now: datetime) -> None:
     """Insert baseline fixtures. No commit — caller owns the transaction."""
     from clearpath.notifications import backfill
+    from clearpath import policies as policies_mod
 
     seed = _build_seed(now)
     for uid, name, role, title, created in seed["users"]:
@@ -566,6 +567,17 @@ def _insert_seed(conn: sqlite3.Connection, now: datetime) -> None:
         )
     backfill(conn)
 
+    # --- S1: seed policy baseline + capability for the seeded reviewer persona ---
+    reviewer_id = None
+    for uid, name, role, title, created in seed["users"]:
+        if role == "REVIEWER" and title == "Compliance Lead":
+            reviewer_id = uid
+            break
+    if reviewer_id is None:
+        reviewer_id = seed["users"][0][0]
+    now_iso = _iso(now)
+    policies_mod.seed_baseline(conn, reviewer_id, now_iso)
+
 
 def seed_database(conn: sqlite3.Connection, now: datetime) -> None:
     """Insert baseline fixtures into an empty, initialized schema."""
@@ -582,6 +594,11 @@ def reset_database(db_path: Path | str, now: datetime) -> None:
     try:
         conn.execute("BEGIN IMMEDIATE")
         for table in (
+            "policy_audit",
+            "policy_rules",
+            "policy_state",
+            "policy_snapshots",
+            "permissions",
             "notifications",
             "audit_events",
             "submission_versions",

@@ -12,7 +12,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-SCHEMA_USER_VERSION = 2
+SCHEMA_USER_VERSION = 3
 
 _NOTIFICATIONS_DDL = """
 CREATE TABLE IF NOT EXISTS notifications (
@@ -30,6 +30,63 @@ CREATE INDEX IF NOT EXISTS idx_notifications_inbox
     ON notifications(recipient_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_unread
     ON notifications(recipient_id, read_at);
+"""
+
+_POLICY_DDL = """
+CREATE TABLE IF NOT EXISTS permissions (
+    user_id    TEXT NOT NULL REFERENCES users(id),
+    capability TEXT NOT NULL CHECK (capability IN ('manage_policies')),
+    granted_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, capability)
+);
+
+CREATE TABLE IF NOT EXISTS policy_snapshots (
+    id            TEXT PRIMARY KEY,
+    version       INTEGER NOT NULL UNIQUE CHECK (version >= 1),
+    label         TEXT,
+    policy_hash   TEXT NOT NULL,
+    rules_json    TEXT NOT NULL,
+    published_by  TEXT NOT NULL REFERENCES users(id),
+    published_at  TEXT NOT NULL,
+    created_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS policy_state (
+    id                    INTEGER PRIMARY KEY CHECK (id = 1),
+    active_snapshot_id    TEXT REFERENCES policy_snapshots(id),
+    current_draft_version INTEGER NOT NULL CHECK (current_draft_version >= 0),
+    current_draft_hash    TEXT NOT NULL,
+    updated_at            TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS policy_rules (
+    id               TEXT PRIMARY KEY,
+    draft_version    INTEGER NOT NULL,
+    rule_key         TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    instructions     TEXT NOT NULL,
+    kind             TEXT NOT NULL CHECK (kind IN ('semantic', 'required_disclosure')),
+    required_literal TEXT,
+    product          TEXT,
+    channel          TEXT,
+    enabled          INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS policy_audit (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id         TEXT NOT NULL REFERENCES users(id),
+    event_type       TEXT NOT NULL CHECK (event_type IN
+        ('DRAFT_SAVED', 'PUBLISHED', 'ENABLED', 'DISABLED')),
+    draft_version    INTEGER,
+    snapshot_version INTEGER,
+    policy_hash      TEXT,
+    metadata_json    TEXT,
+    created_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_policy_audit_created ON policy_audit(created_at);
+CREATE INDEX IF NOT EXISTS idx_policy_rules_version ON policy_rules(draft_version);
 """
 
 _SCHEMA = """
@@ -113,7 +170,7 @@ CREATE INDEX idx_audit_submission     ON audit_events(submission_id);
 CREATE INDEX idx_audit_created        ON audit_events(created_at);
 CREATE INDEX idx_notifications_inbox  ON notifications(recipient_id, created_at);
 CREATE INDEX idx_notifications_unread ON notifications(recipient_id, read_at);
-"""
+""" + _POLICY_DDL
 
 _EXPECTED_TABLES = {
     "users",
@@ -121,6 +178,11 @@ _EXPECTED_TABLES = {
     "submission_versions",
     "audit_events",
     "notifications",
+    "permissions",
+    "policy_snapshots",
+    "policy_state",
+    "policy_rules",
+    "policy_audit",
 }
 
 _V1_TABLES = {
@@ -173,6 +235,13 @@ def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
+    """Add policy/permission/audit tables without touching existing data."""
+    conn.executescript(_POLICY_DDL)
+    conn.execute(f"PRAGMA user_version = {SCHEMA_USER_VERSION}")
+    conn.commit()
+
+
 def initialize_schema(conn: sqlite3.Connection) -> bool:
     """Initialize a fresh DB with the versioned schema, or validate/migrate.
 
@@ -198,6 +267,13 @@ def initialize_schema(conn: sqlite3.Connection) -> bool:
                 "Do not delete the DB; restore a compatible file or use a fresh path."
             )
         _migrate_v1_to_v2(conn)
+        _migrate_v2_to_v3(conn)
+        return False
+
+    if version == 2:
+        # v2 databases carry the base domain tables; only the policy tables
+        # are missing. Add them without deleting or reseeding existing data.
+        _migrate_v2_to_v3(conn)
         return False
 
     if version != SCHEMA_USER_VERSION:
