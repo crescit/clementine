@@ -197,6 +197,54 @@ def _preflight(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
     return run_preflight(row["product"], row["channel"], copy_text)
 
 
+def _review_state(conn, row) -> dict:
+    """Semantic-review state for a submission detail response."""
+    review = {
+        "enabled": review_mod.semantic_mode_enabled(),
+        "run": None,
+        "stale": False,
+        "approvable": False,
+        "error": None,
+    }
+    if not review["enabled"]:
+        return review
+    runs = review_mod.list_runs(conn, row["id"])
+    if not runs:
+        return review
+    run = runs[0]  # newest first
+    snap_id = policies_mod.get_state(conn).get("active_snapshot_id")
+    stale = run["content_version"] != row["current_version"] or run["snapshot_id"] != snap_id
+    dispositions = review_mod.run_dispositions(conn, run["id"])
+    disposed = {}
+    for d in dispositions:
+        disposed.setdefault(d["finding_id"], d)
+    findings = []
+    for f in run.get("findings") or []:
+        finding = dict(f)
+        finding["disposition"] = disposed.get(f.get("finding_id")) or None
+        findings.append(finding)
+    review["run"] = {
+        "id": run["id"],
+        "status": run["status"],
+        "findings": findings,
+        "latency_ms": run["latency_ms"],
+        "failure_code": run.get("failure_code"),
+        "failure_message": run.get("failure_message"),
+        "created_at": run["created_at"],
+    }
+    review["stale"] = stale
+    if stale:
+        review["error"] = "The semantic analysis is stale; re-run analysis on the current copy and policy."
+    elif run["status"] != "SUCCESS":
+        review["error"] = run.get("failure_message") or f"Semantic analysis {run['status']}."
+    elif any(f["disposition"] is None for f in findings):
+        review["error"] = "Every semantic finding must be dispositioned before approval."
+    else:
+        review["approvable"] = True
+    return review
+
+
+
 def _enforce_visible(
     conn: sqlite3.Connection, actor_row, submission_id: str
 ) -> sqlite3.Row:
@@ -479,6 +527,7 @@ def create_app() -> FastAPI:
             detail = _projection(conn, row)
             detail["allowed_actions"] = _allowed_actions(actor_row, row)
             detail["preflight"] = _preflight(conn, row)
+            detail["review"] = _review_state(conn, row)
             return detail
         finally:
             conn.close()

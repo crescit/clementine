@@ -17,7 +17,7 @@ import sqlite3
 
 import pytest
 
-from clearpath import db, review, seed, workflow
+from clearpath import api, db, review, seed, workflow
 from clearpath.inference import InferenceError
 
 # A provider that returns a fixed JSON body (or raises).
@@ -377,3 +377,79 @@ def test_semantic_mode_failed_run_needs_manual_exception(temp_db, frozen_now, mo
     )
     _, rv = _assigned(temp_db, rec["id"])
     assert _approve(temp_db, reviewer, rec["id"], rv, frozen_now) is not None
+
+def test_review_state_in_submission_detail(temp_db, frozen_now, monkeypatch):
+    """S5: the submission detail `review` object tracks the semantic-run lifecycle."""
+    monkeypatch.setenv("CLEARPATH_SEMANTIC_MODE", "true")
+    submitter, _, _ = _setup(temp_db, frozen_now)
+    rec = _create_submission(temp_db, frozen_now, submitter)
+    sid = rec["id"]
+
+    conn = db.connect(temp_db)
+    try:
+        row = api._submission_row(conn, sid)
+        state = api._review_state(conn, row)
+    finally:
+        conn.close()
+
+    # No analysis yet -> enabled, no run, not approvable, no error.
+    assert state["enabled"] is True
+    assert state["run"] is None
+    assert state["approvable"] is False
+    assert state["error"] is None
+    assert state["stale"] is False
+
+    _monkeypatch_provider(monkeypatch, FakeProvider(response=json.dumps({
+        "findings": [{
+            "rule_key": "CLAIM_001",
+            "evidence_quote": "Subject to credit approval.",
+            "explanation": "test",
+            "suggested_revision": "fix",
+            "occurrence": 1,
+        }]
+    })))
+    run = review.analyze_submission(temp_db, sid, _assigned(temp_db, sid)[0], frozen_now)
+    assert run["status"] == review.STATUS_SUCCESS and run["findings"]
+
+    conn = db.connect(temp_db)
+    try:
+        row = api._submission_row(conn, sid)
+        state = api._review_state(conn, row)
+    finally:
+        conn.close()
+    assert state["run"] is not None
+    assert state["run"]["id"] == run["id"]
+    assert len(state["run"]["findings"]) == len(run["findings"])
+    assert all(f["disposition"] is None for f in state["run"]["findings"])
+    assert state["approvable"] is False
+    assert state["error"] == "Every semantic finding must be dispositioned before approval."
+
+    reviewer, _ = _assigned(temp_db, sid)
+    for f in run["findings"]:
+        review.disposition_finding(
+            temp_db, sid, run["id"], f["finding_id"],
+            "ACKNOWLEDGED", "reviewed", reviewer, frozen_now,
+        )
+
+    conn = db.connect(temp_db)
+    try:
+        row = api._submission_row(conn, sid)
+        state = api._review_state(conn, row)
+    finally:
+        conn.close()
+    assert all(f["disposition"] is not None for f in state["run"]["findings"])
+    assert state["approvable"] is True
+    assert state["error"] is None
+
+    # Bump content_version -> the prior run becomes stale.
+    conn = db.connect(temp_db)
+    try:
+        conn.execute("UPDATE submissions SET current_version = current_version + 1 WHERE id = ?", (sid,))
+        conn.commit()
+        row = api._submission_row(conn, sid)
+        state = api._review_state(conn, row)
+    finally:
+        conn.close()
+    assert state["stale"] is True
+    assert state["approvable"] is False
+    assert state["error"] is not None
