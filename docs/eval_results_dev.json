@@ -1,0 +1,316 @@
+{
+  "model_id": "deepseek-v4-flash",
+  "prompt_version": "clearpath-semantic-v1",
+  "provider_revision": "deepseek-v4-flash",
+  "timestamp": "2026-10-07T20:31:11.464860+00:00",
+  "case_set": {
+    "path": "/Users/josh/Documents/Projects/promptarmortakehome/eval/cases.json",
+    "hash": "561c5de053e3fdc1344fb68ef3323ad2b35b90155337481d4b45f9dfef6ff635"
+  },
+  "snapshot": {
+    "id": "eval-default",
+    "version": 0,
+    "hash": "b490b291f5927287281973f81917a41d6b36148a88eb3ba1296f2613edd28012"
+  },
+  "metrics": {
+    "deterministic": {
+      "dev": {
+        "tp": 5,
+        "fp": 0,
+        "fn": 8,
+        "tn": 10,
+        "n": 23,
+        "precision": 1.0,
+        "recall": 0.38461538461538464
+      },
+      "heldout": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "tn": 0,
+        "n": 0,
+        "precision": null,
+        "recall": null
+      },
+      "all": {
+        "tp": 5,
+        "fp": 0,
+        "fn": 8,
+        "tn": 10,
+        "n": 23,
+        "precision": 1.0,
+        "recall": 0.38461538461538464
+      }
+    },
+    "hybrid": {
+      "dev": {
+        "tp": 9,
+        "fp": 0,
+        "fn": 4,
+        "tn": 10,
+        "n": 23,
+        "precision": 1.0,
+        "recall": 0.6923076923076923,
+        "failures": 0,
+        "latency_p50": 10693.685124977492,
+        "latency_max": 39164.39583298052,
+        "total_tokens": 27706
+      },
+      "heldout": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "tn": 0,
+        "n": 0,
+        "precision": null,
+        "recall": null,
+        "failures": 0,
+        "latency_p50": null,
+        "latency_max": null,
+        "total_tokens": 0
+      },
+      "all": {
+        "tp": 9,
+        "fp": 0,
+        "fn": 4,
+        "tn": 10,
+        "n": 23,
+        "precision": 1.0,
+        "recall": 0.6923076923076923,
+        "failures": 0,
+        "latency_p50": 10693.685124977492,
+        "latency_max": 39164.39583298052,
+        "total_tokens": 27706
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "literal_claim_001",
+      "expected": "VIOLATION",
+      "deterministic": true,
+      "hybrid": true,
+      "status": "SUCCESS",
+      "rule_keys": [
+        "CLAIM_001"
+      ],
+      "latency_ms": 17510.355292004533
+    },
+    {
+      "id": "paraphrase_claim_001",
+      "expected": "VIOLATION",
+      "deterministic": false,
+      "hybrid": true,
+      "status": "SUCCESS",
+      "rule_keys": [
+        "CLAIM_001",
+        "CLAIM_002"
+      ],
+      "latency_ms": 27903.993458021432
+    },
+    {
+      "id": "compliant_negation_claim_001",
+      "expected": "COMPLIANT",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 5117.4096670001745
+    },
+    {
+      "id": "literal_claim_002",
+      "expected": "VIOLATION",
+      "deterministic": true,
+      "hybrid": true,
+      "status": "SUCCESS",
+      "rule_keys": [
+        "CLAIM_002"
+      ],
+      "latency_ms": 19429.980291984975
+    },
+    {
+      "id": "paraphrase_claim_002",
+      "expected": "VIOLATION",
+      "deterministic": false,
+      "hybrid": true,
+      "status": "SUCCESS",
+      "rule_keys": [
+        "CLAIM_002"
+      ],
+      "latency_ms": 39164.39583298052
+    },
+    {
+      "id": "compliant_disclosure_001",
+      "expected": "COMPLIANT",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 11659.188500023447
+    },
+    {
+      "id": "missing_disclosure_001_scoped",
+      "expected": "VIOLATION",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 3159.5912499469705
+    },
+    {
+      "id": "missing_disclosure_002_scoped",
+      "expected": "VIOLATION",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 5432.417540985625
+    },
+    {
+      "id": "missing_disclosure_003_scoped",
+      "expected": "VIOLATION",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 6132.139458961319
+    },
+    {
+      "id": "instruction_attack",
+      "expected": "VIOLATION",
+      "deterministic": true,
+      "hybrid": true,
+      "status": "SUCCESS",
+      "rule_keys": [
+        "CLAIM_001"
+      ],
+      "latency_ms": 13323.706792027224
+    },
+    {
+      "id": "unicode_repeated_evidence",
+      "expected": "VIOLATION",
+      "deterministic": true,
+      "hybrid": true,
+      "status": "SUCCESS",
+      "rule_keys": [
+        "CLAIM_001"
+      ],
+      "latency_ms": 18890.132375003304
+    },
+    {
+      "id": "compliant_counterexample",
+      "expected": "COMPLIANT",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 7279.2064170353115
+    },
+    {
+      "id": "p13",
+      "expected": "VIOLATION",
+      "deterministic": false,
+      "hybrid": true,
+      "status": "SUCCESS",
+      "rule_keys": [
+        "CLAIM_001",
+        "CLAIM_002"
+      ],
+      "latency_ms": 29331.102665979415
+    },
+    {
+      "id": "p14",
+      "expected": "VIOLATION",
+      "deterministic": false,
+      "hybrid": true,
+      "status": "SUCCESS",
+      "rule_keys": [
+        "CLAIM_002"
+      ],
+      "latency_ms": 32973.37049996713
+    },
+    {
+      "id": "d16",
+      "expected": "COMPLIANT",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 7293.266916996799
+    },
+    {
+      "id": "d17",
+      "expected": "COMPLIANT",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 3679.8402079730295
+    },
+    {
+      "id": "s26",
+      "expected": "VIOLATION",
+      "deterministic": true,
+      "hybrid": true,
+      "status": "SUCCESS",
+      "rule_keys": [
+        "CLAIM_001"
+      ],
+      "latency_ms": 12065.135334036313
+    },
+    {
+      "id": "s29",
+      "expected": "VIOLATION",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 5153.906667022966
+    },
+    {
+      "id": "c30",
+      "expected": "COMPLIANT",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 7999.863334000111
+    },
+    {
+      "id": "c31",
+      "expected": "COMPLIANT",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 5684.940000006463
+    },
+    {
+      "id": "c32",
+      "expected": "COMPLIANT",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 10693.685124977492
+    },
+    {
+      "id": "c33",
+      "expected": "COMPLIANT",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 15719.548708992079
+    },
+    {
+      "id": "c34",
+      "expected": "COMPLIANT",
+      "deterministic": false,
+      "hybrid": false,
+      "status": "SUCCESS",
+      "rule_keys": [],
+      "latency_ms": 4261.050249973778
+    }
+  ]
+}
