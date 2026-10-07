@@ -64,7 +64,7 @@ with sync_playwright() as p:
     page.wait_for_load_state("domcontentloaded")
     expect(page.locator("#publish-btn")).to_be_disabled()
     expect(page.locator("#add-rule")).to_be_hidden()
-    expect(page.locator("#rule-list input, #rule-list textarea, #rule-list select").first).to_be_disabled()
+    expect(page.locator("#rules-form input, #rules-form textarea, #rules-form select").first).to_be_disabled()
     shot(page, "semantic-policies-readonly.png")
     print("PASS: policies page is read-only for a non-admin", flush=True)
 
