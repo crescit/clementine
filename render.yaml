@@ -12,3 +12,13 @@ services:
         value: "true"
       - key: DATABASE_PATH
         value: /data/clearpath.db
+      - key: CLEARPATH_SEMANTIC_MODE
+        value: "false"
+      - key: CLEARPATH_INFERENCE_BASE_URL
+        sync: false
+      - key: CLEARPATH_INFERENCE_MODEL
+        sync: false
+      - key: CLEARPATH_INFERENCE_API_KEY
+        sync: false
+      - key: CLEARPATH_INFERENCE_TIMEOUT_S
+        value: "150"

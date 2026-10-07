@@ -8,6 +8,30 @@ A working marketing review workspace for fictional ClearPath Financial. It repla
 
 ![ClearPath review queue](docs/screenshots/queue-desktop.png)
 
+## Semantic review
+
+The reviewer can go beyond literal copy checks: an optional OpenAI-compatible
+model analyzes submission copy and surfaces findings a regex misses, while the
+deterministic CLAIM_* scanner still runs underneath. A flagged finding shows a
+disposition form (Acknowledge/Dismiss); acknowledging opens the approval gate.
+On a live 37-case evaluation the hybrid reviewer raised recall on both splits
+(dev 0.385 → 0.692, heldout 0.462 → 0.615) at unchanged precision 1.000 — 17
+true positives, 0 false positives across all compliant copy. See
+[Live evaluation](docs/EVALUATION.md) and [Verification](docs/VERIFICATION.md).
+
+**Enable it.** Set `CLEARPATH_SEMANTIC_MODE=true` and the
+`CLEARPATH_INFERENCE_BASE_URL`, `CLEARPATH_INFERENCE_MODEL`, and
+`CLEARPATH_INFERENCE_API_KEY` vars (plus `CLEARPATH_INFERENCE_TIMEOUT_S=150`).
+Put the API key only in your private `.env` or the host's secret store — never
+in `render.yaml` or `.env.example`. The endpoint must be an OpenAI-compatible
+chat API the app can reach.
+
+**Two-minute demo.** 1) Open the policies page as Sarah T. 2) Open CP-8903
+(a semantic-only violation) and press **Analyze** — it returns a CLAIM_002
+finding. 3) Acknowledge the finding to open **Approve** and approve the
+revision. 4) Open CP-8908 as Mark Davis and **Analyze** — it stays **Compliant**,
+no semantic findings. Screenshots under `docs/screenshots/semantic-*.png`.
+
 ## Deploy on a free host
 
 The repository includes a **Render Blueprint**. Push the project to your GitHub repository, then in Render choose **New → Blueprint**, connect that repository, and deploy. `render.yaml` selects the free Docker web service, configures the database path, and sets the health check. No API keys, frontend build, or separate database service are needed.

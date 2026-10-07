@@ -11,6 +11,14 @@ If creating a service manually, choose **Web Service**, **Docker**, and **Free**
 
 **Storage:** Render free services cannot attach a persistent disk. They sleep after 15 idle minutes, may take roughly a minute to wake, and lose local SQLite changes on sleep/restart/redeploy. A fresh start restores seven synthetic campaigns. Open the URL before presenting. This mode is suitable for evaluating a disposable demo, not preserving review records. Verified against [Render's free-service documentation](https://render.com/docs/free) on 2026-09-25. [Blueprint field reference](https://render.com/docs/blueprint-spec).
 
+**Semantic review (optional).** The Blueprint ships with `CLEARPATH_SEMANTIC_MODE=false` and the inference vars declared with `sync: false`, so semantic analysis is off by default and no values are committed. To enable it on the hosted demo, open the service in the [Render dashboard](https://dashboard.render.com/) → **Environment**, and set:
+`CLEARPATH_SEMANTIC_MODE=true`,
+`CLEARPATH_INFERENCE_BASE_URL=<endpoint>`,
+`CLEARPATH_INFERENCE_MODEL=<model>`,
+`CLEARPATH_INFERENCE_API_KEY=<key>` (store as a secret, never in the blueprint), and
+`CLEARPATH_INFERENCE_TIMEOUT_S=150`.
+The base URL must be a **publicly reachable OpenAI-compatible chat endpoint** — a local `localhost` host is unreachable from Render's servers. See [Semantic review](EVALUATION.md).
+
 ## Option 2: ngrok with persistent local data
 
 This is explicitly acceptable in the assignment and preserves the database on your machine.

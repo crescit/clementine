@@ -110,3 +110,16 @@ fix and contract-extension documentation:
 | Full suite | `.venv/bin/python -m pytest -q -p no:warnings tests` | pass — 225 passed (0 failures) | 2026-10-07 |
 | Inference timeout default | `clearpath/inference.py` `DEFAULT_TIMEOUT_S` | raised 60 → 150; `.env.example` `CLEARPATH_INFERENCE_TIMEOUT_S=150`; front-end analyze timeout (static/submission.js, 180000 ms) stays above it | 2026-10-07 |
 | Baseline contract extensions | `docs/S0_baseline_contracts.md` | "Intentional extensions (semantic upgrade)" section records new routes, v4 tables, detail.review, approval gate; baseline unchanged when semantic mode is off | 2026-10-07 |
+
+## Semantic review browser walkthrough — 2026-10-07 (Pacific)
+
+Real-browser acceptance check of the semantic review flow, executed against a fresh disposable server/DB with serial real-model calls (`uv run --with playwright python scripts/browser_check_semantic.py http://127.0.0.1:8017`, installed Chrome):
+
+| Check | Result | Date |
+|---|---|---|
+| Policies page | editable for admin (Sarah T.), read-only for non-admin (Mark Davis) | pass | 2026-10-07 |
+| CP-8903 (semantic-only violation), reviewer | 'Not analyzed' with approval gate closed → real analysis flags CLAIM_002 → disposition form (Acknowledge/Dismiss) present | pass | 2026-10-07 |
+| Submitter (Jessica Lin) | finding read-only: no analyze button, no disposition forms; approval gate stays closed while unacknowledged | pass | 2026-10-07 |
+| Acknowledge | opens the approval gate (#approve enabled) | pass | 2026-10-07 |
+| CP-8908 (compliant counterexample) | analyzed as Mark Davis, stayed clean ('No semantic findings') | pass | 2026-10-07 |
+| Screenshots / console | 7 under `docs/screenshots/semantic-*.png`; no uncaught page errors; exit 0 | pass | 2026-10-07 |
