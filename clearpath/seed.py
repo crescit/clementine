@@ -594,6 +594,9 @@ def reset_database(db_path: Path | str, now: datetime) -> None:
     try:
         conn.execute("BEGIN IMMEDIATE")
         for table in (
+            "manual_exceptions",
+            "finding_dispositions",
+            "analysis_runs",
             "policy_audit",
             "policy_rules",
             "policy_state",
@@ -623,6 +626,24 @@ def auto_seed(db_path: Path | str, now: datetime) -> bool:
         created = db.initialize_schema(conn)
         if created:
             seed_database(conn, now)
+        else:
+            _backfill_policy_baseline(conn, now)
         return created
     finally:
         conn.close()
+
+
+def _backfill_policy_baseline(conn, now: datetime) -> None:
+    """Migrated (pre-policy) DBs have users but no policy_state row, which
+    makes every review page fail. Seed only the baseline; keep existing data."""
+    from clearpath import policies as policies_mod
+
+    if conn.execute("SELECT 1 FROM policy_state WHERE id = 1").fetchone():
+        return
+    row = conn.execute(
+        "SELECT id FROM users WHERE role = 'REVIEWER' ORDER BY created_at LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return
+    policies_mod.seed_baseline(conn, row["id"], _iso(now))
+    conn.commit()
