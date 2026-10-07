@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import os
+
+# Keep tests hermetic: never read a developer .env.
+os.environ["CLEARPATH_DOTENV"] = "0"
+
 from collections.abc import Generator
 from datetime import datetime, timezone
 from pathlib import Path
