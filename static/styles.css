@@ -2010,3 +2010,37 @@ th { position: relative; }
   height: 11px;
   border-width: 2px
 }
+
+/* Narrow screens: lead with the copy and what we detected, decisions next, history last. */
+@media (max-width: 1099px) {
+  .review-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px
+  }
+
+  .review-content,
+  .review-sidebar {
+    display: contents
+  }
+
+  #copy-panel {
+    order: 1
+  }
+
+  #policy-check {
+    order: 2
+  }
+
+  #semantic-panel {
+    order: 3
+  }
+
+  #next-action-panel {
+    order: 4
+  }
+
+  #audit-panel {
+    order: 5
+  }
+}
